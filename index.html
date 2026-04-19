@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RocketLaunch — 우주 탐험</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#000; overflow:hidden; }
+    canvas { display:block; }
+    #hud {
+      position:fixed; top:0; left:0; right:0;
+      display:flex; justify-content:space-between; align-items:flex-start;
+      padding:14px 18px; pointer-events:none;
+    }
+    .card {
+      background:rgba(0,8,24,0.82);
+      border:1px solid rgba(80,180,255,0.3);
+      border-radius:8px; padding:10px 14px;
+      font-family:'Courier New',monospace; color:#cef; min-width:140px;
+    }
+    .lbl { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#89d; margin-bottom:3px; }
+    .val { font-size:20px; font-weight:bold; color:#fff; }
+    #fbar-track { background:rgba(255,255,255,0.15); border-radius:3px; height:5px; margin-top:4px; }
+    #fbar { height:5px; border-radius:3px; width:100%; transition:background .3s; }
+    #hint {
+      position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+      color:rgba(160,210,255,0.5); font-family:'Courier New',monospace;
+      font-size:13px; pointer-events:none; text-align:center;
+    }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="card">
+    <div class="lbl">최대 거리 (점수)</div>
+    <div class="val" id="score">0 km</div>
+  </div>
+  <div class="card" style="text-align:center">
+    <div class="lbl">현재 고도</div>
+    <div class="val" id="alt">0 km</div>
+  </div>
+  <div class="card" style="text-align:right">
+    <div class="lbl">속도</div>
+    <div class="val" id="spd">0.00 km/s</div>
+    <div class="lbl" style="margin-top:6px">연료</div>
+    <div id="fbar-track"><div id="fbar"></div></div>
+  </div>
+</div>
+<div id="hint">← → 방향 전환 &nbsp;|&nbsp; ↑ 가속</div>
+<script>
+'use strict';
+
+// ── Canvas ──────────────────────────────────────────────────────────────────
+const C = document.getElementById('c');
+const X = C.getContext('2d');
+function resize(){ C.width = innerWidth; C.height = innerHeight; }
+resize();
+addEventListener('resize', resize);
+
+// ── Physical constants (km, s) ──────────────────────────────────────────────
+const GM        = 398600;   // Earth gravitational parameter, km³/s²
+const Re        = 6371;     // Earth radius, km
+const THRUST    = 0.3;      // engine acceleration, km/s²
+const ROT_SPD   = 3;        // rotation speed, deg/frame
+const DT        = 1/60;     // physics timestep = 1 real second / 60 frames
+// Fuel drains completely after 40 real seconds of continuous thrust
+const FUEL_INIT  = 100;
+const FUEL_DRAIN = FUEL_INIT / (40 / DT);
+
+// ── Stars (screen-space fractions) ──────────────────────────────────────────
+const STARS = Array.from({length: 260}, () => ({
+  fx: Math.random(), fy: Math.random(),
+  r:  Math.random() * 1.5 + 0.3,
+  a:  Math.random() * 0.75 + 0.25,
+}));
+
+// ── Moon ────────────────────────────────────────────────────────────────────
+const MOON = { x: 0, y: -(Re + 384400), r: 1737 }; // real distance/radius (km)
+
+// ── Game state ───────────────────────────────────────────────────────────────
+let phase = 'title';  // 'title' | 'play' | 'dead'
+let fuel, maxAlt, rkt;
+
+function spawnRocket() {
+  rkt    = { x:0, y:-(Re+10), vx:0, vy:0, angle:0, fire:false };
+  fuel   = FUEL_INIT;
+  maxAlt = 0;
+}
+spawnRocket();
+
+// ── Input ────────────────────────────────────────────────────────────────────
+const K = {};
+addEventListener('keydown', e => {
+  K[e.key] = true;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  if (phase === 'title') phase = 'play';
+  if (phase === 'dead' && e.key === ' ') { spawnRocket(); phase = 'play'; }
+});
+addEventListener('keyup', e => { K[e.key] = false; });
+
+// ── Viewport ─────────────────────────────────────────────────────────────────
+function getScale() {
+  const r    = Math.hypot(rkt.x, rkt.y);
+  const view = Math.max(Re * 0.5, r * 1.4);
+  return Math.min(C.width, C.height) * 0.32 / view;
+}
+
+function w2s(wx, wy) {
+  const s = getScale();
+  return [C.width/2 + (wx - rkt.x)*s,
+          C.height/2 + (wy - rkt.y)*s];
+}
+
+// ── Physics update ────────────────────────────────────────────────────────────
+function update() {
+  if (phase !== 'play') return;
+
+  if (K['ArrowLeft'])  rkt.angle -= ROT_SPD;
+  if (K['ArrowRight']) rkt.angle += ROT_SPD;
+
+  rkt.fire = K['ArrowUp'] && fuel > 0;
+  if (rkt.fire) {
+    const rad = (rkt.angle - 90) * Math.PI / 180;
+    rkt.vx += Math.cos(rad) * THRUST * DT;
+    rkt.vy += Math.sin(rad) * THRUST * DT;
+    fuel = Math.max(0, fuel - FUEL_DRAIN);
+  }
+
+  // Gravity: a = -GM/r² * r̂
+  const r = Math.hypot(rkt.x, rkt.y);
+  const g = GM / (r * r);
+  rkt.vx -= (rkt.x / r) * g * DT;
+  rkt.vy -= (rkt.y / r) * g * DT;
+
+  rkt.x += rkt.vx * DT;
+  rkt.y += rkt.vy * DT;
+
+  // Earth surface collision
+  const dist = Math.hypot(rkt.x, rkt.y);
+  if (dist < Re) {
+    if (Math.hypot(rkt.vx, rkt.vy) > 1) { phase = 'dead'; return; }
+    const nx = rkt.x/dist, ny = rkt.y/dist;
+    rkt.x = nx*(Re+0.5); rkt.y = ny*(Re+0.5);
+    const vn = rkt.vx*nx + rkt.vy*ny;
+    if (vn < 0) { rkt.vx -= vn*nx; rkt.vy -= vn*ny; }
+  }
+
+  maxAlt = Math.max(maxAlt, Math.max(0, dist - Re));
+}
+
+// ── Drawing ───────────────────────────────────────────────────────────────────
+function drawBg() {
+  X.fillStyle = '#00000d';
+  X.fillRect(0, 0, C.width, C.height);
+}
+
+function drawStars() {
+  for (const s of STARS) {
+    X.beginPath();
+    X.arc(s.fx * C.width, s.fy * C.height, s.r, 0, Math.PI*2);
+    X.fillStyle = `rgba(255,255,255,${s.a})`;
+    X.fill();
+  }
+}
+
+function drawEarth() {
+  const s = getScale();
+  const [ex, ey] = w2s(0, 0);
+  const er = Re * s;
+
+  // Atmosphere glow
+  if (er > 1) {
+    const atm = X.createRadialGradient(ex,ey,er*.87,ex,ey,er*1.42);
+    atm.addColorStop(0,   'rgba(80,170,255,.22)');
+    atm.addColorStop(.55, 'rgba(20,60,200,.07)');
+    atm.addColorStop(1,   'transparent');
+    X.beginPath(); X.arc(ex, ey, er*1.42, 0, Math.PI*2);
+    X.fillStyle = atm; X.fill();
+  }
+
+  // Ocean
+  const o = X.createRadialGradient(ex-er*.28,ey-er*.28,0,ex,ey,er);
+  o.addColorStop(0,   '#5ab4ff');
+  o.addColorStop(.45, '#1e62b5');
+  o.addColorStop(1,   '#0a2d5e');
+  X.beginPath(); X.arc(ex, ey, Math.max(er, 2), 0, Math.PI*2);
+  X.fillStyle = o; X.fill();
+
+  // Land masses
+  if (er > 12) {
+    X.save(); X.beginPath(); X.arc(ex,ey,er,0,Math.PI*2); X.clip();
+    X.fillStyle = 'rgba(60,165,60,.65)';
+    [[-0.22,-0.35,.24,.30,.5],[.14,.10,.28,.20,.3],[-.40,.22,.16,.11,.4],
+     [.38,-.16,.19,.14,-.3],[.05,-.56,.13,.08,.2]].forEach(([cx,cy,rx,ry,rot]) => {
+      X.beginPath(); X.ellipse(ex+cx*er,ey+cy*er,rx*er,ry*er,rot,0,Math.PI*2); X.fill();
+    });
+    X.restore();
+  }
+}
+
+function drawMoon() {
+  const s = getScale();
+  const [mx, my] = w2s(MOON.x, MOON.y);
+  const mr = Math.max(MOON.r * s, 2);
+
+  // Skip if completely off screen
+  if (mx < -mr-50 || mx > C.width+mr+50 || my < -mr-50 || my > C.height+mr+50) return;
+
+  const g = X.createRadialGradient(mx-mr*.3,my-mr*.3,0,mx,my,mr);
+  g.addColorStop(0, '#e8e8e8');
+  g.addColorStop(.6, '#b0b0b0');
+  g.addColorStop(1,  '#707070');
+  X.beginPath(); X.arc(mx, my, mr, 0, Math.PI*2);
+  X.fillStyle = g; X.fill();
+
+  // Moon label when zoomed way out
+  if (mr < 4) {
+    X.fillStyle = 'rgba(200,200,200,0.6)';
+    X.font = '11px Courier New';
+    X.textAlign = 'center';
+    X.fillText('달', mx, my - mr - 5);
+  }
+}
+
+function drawRocket() {
+  const [rx, ry] = w2s(rkt.x, rkt.y);
+  X.save();
+  X.translate(rx, ry);
+  X.rotate(rkt.angle * Math.PI / 180);
+
+  // Engine flame
+  if (rkt.fire) {
+    const fl = 18 + Math.random() * 18;
+    const fg = X.createLinearGradient(0, 15, 0, 15+fl);
+    fg.addColorStop(0,   'rgba(255,230,70,1)');
+    fg.addColorStop(.45, 'rgba(255,110,20,.85)');
+    fg.addColorStop(1,   'rgba(255,30,0,0)');
+    X.beginPath();
+    X.moveTo(-5,15); X.lineTo(5,15); X.lineTo(3,15+fl); X.lineTo(-3,15+fl);
+    X.closePath(); X.fillStyle = fg; X.fill();
+  }
+
+  // Body
+  X.beginPath(); X.moveTo(0,-22); X.lineTo(-7,14); X.lineTo(7,14); X.closePath();
+  X.fillStyle = '#d8d8d8'; X.fill();
+  X.strokeStyle = '#aaa'; X.lineWidth = 0.8; X.stroke();
+
+  // Nose cone
+  X.beginPath(); X.moveTo(0,-22); X.lineTo(-5,-8); X.lineTo(5,-8); X.closePath();
+  X.fillStyle = '#e84040'; X.fill();
+
+  // Fins
+  X.fillStyle = '#e07830';
+  X.beginPath(); X.moveTo(-7,14); X.lineTo(-15,22); X.lineTo(-7,2); X.closePath(); X.fill();
+  X.beginPath(); X.moveTo(7,14);  X.lineTo(15,22);  X.lineTo(7,2);  X.closePath(); X.fill();
+
+  // Porthole
+  X.beginPath(); X.arc(0,-4,4,0,Math.PI*2);
+  X.fillStyle = '#a8eeff'; X.fill();
+  X.strokeStyle = '#888'; X.lineWidth = 1; X.stroke();
+
+  X.restore();
+}
+
+function drawHUD() {
+  const dist = Math.hypot(rkt.x, rkt.y);
+  const alt  = Math.max(0, dist - Re);
+  const spd  = Math.hypot(rkt.vx, rkt.vy);
+  const fmt  = n => Math.floor(n).toLocaleString('ko-KR');
+
+  document.getElementById('score').textContent = fmt(maxAlt) + ' km';
+  document.getElementById('alt').textContent   = fmt(alt)   + ' km';
+  document.getElementById('spd').textContent   = spd.toFixed(2) + ' km/s';
+
+  const fb = document.getElementById('fbar');
+  fb.style.width      = fuel + '%';
+  fb.style.background = fuel > 50 ? '#4c4' : fuel > 20 ? '#fa0' : '#f44';
+}
+
+function overlay(t1, t2, t3, hint) {
+  X.fillStyle = 'rgba(0,0,12,.65)';
+  X.fillRect(0, 0, C.width, C.height);
+
+  const cx = C.width/2, cy = C.height/2;
+  X.textAlign = 'center';
+
+  X.font = 'bold 40px "Courier New",monospace';
+  X.fillStyle = '#fff';
+  X.fillText(t1, cx, cy - 75);
+
+  if (t2) {
+    X.font = '21px "Courier New",monospace';
+    X.fillStyle = '#9df';
+    X.fillText(t2, cx, cy - 18);
+  }
+  if (t3) {
+    X.font = '17px "Courier New",monospace';
+    X.fillStyle = '#8cf';
+    X.fillText(t3, cx, cy + 22);
+  }
+  if (hint && Math.floor(Date.now()/600) % 2) {
+    X.font = 'bold 17px "Courier New",monospace';
+    X.fillStyle = '#ff0';
+    X.fillText(hint, cx, cy + 78);
+  }
+}
+
+// ── Main loop ──────────────────────────────────────────────────────────────
+function loop() {
+  update();
+  drawBg();
+  drawStars();
+  drawMoon();
+  drawEarth();
+  drawRocket();
+  drawHUD();
+
+  if (phase === 'title') {
+    overlay(
+      '🚀  ROCKET LAUNCH',
+      '지구에서 로켓을 쏴 우주를 탐험하세요!',
+      '↑ 가속 (연료 소모)   ← → 방향 전환',
+      '아무 키나 눌러 시작'
+    );
+  }
+  if (phase === 'dead') {
+    overlay(
+      '💥  충돌!',
+      '최대 거리: ' + Math.floor(maxAlt).toLocaleString('ko-KR') + ' km',
+      '속도가 너무 빨라 지면에 충돌했습니다',
+      'SPACE 키로 다시 시작'
+    );
+  }
+
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
