@@ -104,9 +104,8 @@ addEventListener('keyup', e => { K[e.key] = false; });
 
 // ── Viewport ─────────────────────────────────────────────────────────────────
 function getScale() {
-  const r    = Math.hypot(rkt.x, rkt.y);
-  const view = Math.max(Re * 0.5, r * 1.4);
-  return Math.min(C.width, C.height) * 0.32 / view;
+  // Fixed scale: Earth radius = 20% of the shorter screen dimension
+  return Math.min(C.width, C.height) * 0.2 / Re;
 }
 
 function w2s(wx, wy) {
