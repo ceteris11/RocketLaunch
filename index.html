@@ -59,25 +59,38 @@ function resize(){ C.width = innerWidth; C.height = innerHeight; }
 resize();
 addEventListener('resize', resize);
 
-// ── Physical constants (km, s) ──────────────────────────────────────────────
-const GM        = 398600;   // Earth gravitational parameter, km³/s²
-const Re        = 6371;     // Earth radius, km
-const THRUST    = 0.3;      // engine acceleration, km/s²
-const ROT_SPD   = 3;        // rotation speed, deg/frame
-const DT        = 1/60;     // physics timestep = 1 real second / 60 frames
-// Fuel drains completely after 40 real seconds of continuous thrust
+// ── Constants ───────────────────────────────────────────────────────────────
+const GM       = 398600;  // Earth gravitational parameter, km³/s²
+const Re       = 6371;    // Earth radius, km
+// Game-tuned: strong thrust, long fuel for satisfying feel
+const THRUST   = 5.0;     // km/s²  (was 0.3 — now clearly feels like acceleration)
+const ROT_SPD  = 3;       // deg/frame
+const DT       = 1/60;    // physics timestep (real-time)
 const FUEL_INIT  = 100;
-const FUEL_DRAIN = FUEL_INIT / (40 / DT);
+// Fuel lasts 120 real seconds of continuous thrust
+const FUEL_DRAIN = FUEL_INIT / (120 * 60);
 
-// ── Stars (screen-space fractions) ──────────────────────────────────────────
-const STARS = Array.from({length: 260}, () => ({
+// ── Screen-space stars (always visible backdrop) ─────────────────────────────
+const BG_STARS = Array.from({length: 380}, () => ({
   fx: Math.random(), fy: Math.random(),
-  r:  Math.random() * 1.5 + 0.3,
-  a:  Math.random() * 0.75 + 0.25,
+  r:  Math.random() * 1.8 + 0.4,
+  a:  Math.random() * 0.7 + 0.3,
+  tw: Math.random() * Math.PI * 2, // twinkle phase
 }));
 
+// ── World-space stars (give parallax as rocket moves) ────────────────────────
+const WLD_STARS = Array.from({length: 90}, () => {
+  const ang  = Math.random() * Math.PI * 2;
+  const dist = Re * (2 + Math.random() * 9); // 2–11× Re from Earth
+  return {
+    x: Math.cos(ang) * dist, y: Math.sin(ang) * dist,
+    r: Math.random() * 2.5 + 0.8,
+    a: Math.random() * 0.55 + 0.25,
+  };
+});
+
 // ── Moon ────────────────────────────────────────────────────────────────────
-const MOON = { x: 0, y: -(Re + 384400), r: 1737 }; // real distance/radius (km)
+const MOON = { x: 0, y: -(Re + 384400), r: 1737 };
 
 // ── Game state ───────────────────────────────────────────────────────────────
 let phase = 'title';  // 'title' | 'play' | 'dead'
@@ -109,11 +122,11 @@ function getScale() {
 
 function w2s(wx, wy) {
   const s = getScale();
-  return [C.width/2 + (wx - rkt.x)*s,
-          C.height/2 + (wy - rkt.y)*s];
+  return [C.width/2  + (wx - rkt.x) * s,
+          C.height/2 + (wy - rkt.y) * s];
 }
 
-// ── Physics update ────────────────────────────────────────────────────────────
+// ── Physics ───────────────────────────────────────────────────────────────────
 function update() {
   if (phase !== 'play') return;
 
@@ -128,7 +141,7 @@ function update() {
     fuel = Math.max(0, fuel - FUEL_DRAIN);
   }
 
-  // Gravity: a = -GM/r² * r̂
+  // Gravity: a = GM/r² toward Earth
   const r = Math.hypot(rkt.x, rkt.y);
   const g = GM / (r * r);
   rkt.vx -= (rkt.x / r) * g * DT;
@@ -150,27 +163,41 @@ function update() {
   maxAlt = Math.max(maxAlt, Math.max(0, dist - Re));
 }
 
-// ── Drawing ───────────────────────────────────────────────────────────────────
+// ── Draw: background + screen-space stars ────────────────────────────────────
 function drawBg() {
   X.fillStyle = '#00000d';
   X.fillRect(0, 0, C.width, C.height);
 }
 
-function drawStars() {
-  for (const s of STARS) {
+function drawBgStars(t) {
+  for (const s of BG_STARS) {
+    // Gentle twinkle
+    const alpha = s.a * (0.7 + 0.3 * Math.sin(t * 0.8 + s.tw));
     X.beginPath();
     X.arc(s.fx * C.width, s.fy * C.height, s.r, 0, Math.PI*2);
+    X.fillStyle = `rgba(255,255,255,${alpha.toFixed(2)})`;
+    X.fill();
+  }
+}
+
+// ── Draw: world-space stars (parallax) ───────────────────────────────────────
+function drawWldStars() {
+  for (const s of WLD_STARS) {
+    const [sx, sy] = w2s(s.x, s.y);
+    if (sx < -4 || sx > C.width+4 || sy < -4 || sy > C.height+4) continue;
+    X.beginPath();
+    X.arc(sx, sy, s.r, 0, Math.PI*2);
     X.fillStyle = `rgba(255,255,255,${s.a})`;
     X.fill();
   }
 }
 
+// ── Draw: Earth ───────────────────────────────────────────────────────────────
 function drawEarth() {
   const s = getScale();
   const [ex, ey] = w2s(0, 0);
   const er = Re * s;
 
-  // Atmosphere glow
   if (er > 1) {
     const atm = X.createRadialGradient(ex,ey,er*.87,ex,ey,er*1.42);
     atm.addColorStop(0,   'rgba(80,170,255,.22)');
@@ -180,7 +207,6 @@ function drawEarth() {
     X.fillStyle = atm; X.fill();
   }
 
-  // Ocean
   const o = X.createRadialGradient(ex-er*.28,ey-er*.28,0,ex,ey,er);
   o.addColorStop(0,   '#5ab4ff');
   o.addColorStop(.45, '#1e62b5');
@@ -188,7 +214,6 @@ function drawEarth() {
   X.beginPath(); X.arc(ex, ey, Math.max(er, 2), 0, Math.PI*2);
   X.fillStyle = o; X.fill();
 
-  // Land masses
   if (er > 12) {
     X.save(); X.beginPath(); X.arc(ex,ey,er,0,Math.PI*2); X.clip();
     X.fillStyle = 'rgba(60,165,60,.65)';
@@ -200,37 +225,28 @@ function drawEarth() {
   }
 }
 
+// ── Draw: Moon ────────────────────────────────────────────────────────────────
 function drawMoon() {
   const s = getScale();
   const [mx, my] = w2s(MOON.x, MOON.y);
   const mr = Math.max(MOON.r * s, 2);
-
-  // Skip if completely off screen
   if (mx < -mr-50 || mx > C.width+mr+50 || my < -mr-50 || my > C.height+mr+50) return;
 
   const g = X.createRadialGradient(mx-mr*.3,my-mr*.3,0,mx,my,mr);
   g.addColorStop(0, '#e8e8e8');
   g.addColorStop(.6, '#b0b0b0');
-  g.addColorStop(1,  '#707070');
+  g.addColorStop(1, '#606060');
   X.beginPath(); X.arc(mx, my, mr, 0, Math.PI*2);
   X.fillStyle = g; X.fill();
-
-  // Moon label when zoomed way out
-  if (mr < 4) {
-    X.fillStyle = 'rgba(200,200,200,0.6)';
-    X.font = '11px Courier New';
-    X.textAlign = 'center';
-    X.fillText('달', mx, my - mr - 5);
-  }
 }
 
+// ── Draw: Rocket ──────────────────────────────────────────────────────────────
 function drawRocket() {
   const [rx, ry] = w2s(rkt.x, rkt.y);
   X.save();
   X.translate(rx, ry);
   X.rotate(rkt.angle * Math.PI / 180);
 
-  // Engine flame
   if (rkt.fire) {
     const fl = 18 + Math.random() * 18;
     const fg = X.createLinearGradient(0, 15, 0, 15+fl);
@@ -242,21 +258,17 @@ function drawRocket() {
     X.closePath(); X.fillStyle = fg; X.fill();
   }
 
-  // Body
   X.beginPath(); X.moveTo(0,-22); X.lineTo(-7,14); X.lineTo(7,14); X.closePath();
   X.fillStyle = '#d8d8d8'; X.fill();
   X.strokeStyle = '#aaa'; X.lineWidth = 0.8; X.stroke();
 
-  // Nose cone
   X.beginPath(); X.moveTo(0,-22); X.lineTo(-5,-8); X.lineTo(5,-8); X.closePath();
   X.fillStyle = '#e84040'; X.fill();
 
-  // Fins
   X.fillStyle = '#e07830';
   X.beginPath(); X.moveTo(-7,14); X.lineTo(-15,22); X.lineTo(-7,2); X.closePath(); X.fill();
   X.beginPath(); X.moveTo(7,14);  X.lineTo(15,22);  X.lineTo(7,2);  X.closePath(); X.fill();
 
-  // Porthole
   X.beginPath(); X.arc(0,-4,4,0,Math.PI*2);
   X.fillStyle = '#a8eeff'; X.fill();
   X.strokeStyle = '#888'; X.lineWidth = 1; X.stroke();
@@ -264,6 +276,55 @@ function drawRocket() {
   X.restore();
 }
 
+// ── Draw: Direction indicator (arrow toward Earth or Moon) ────────────────────
+function drawDirIndicator(worldX, worldY, label, color) {
+  const [sx, sy] = w2s(worldX, worldY);
+  const cx = C.width / 2, cy = C.height / 2;
+
+  // Angle on screen from center toward the target
+  const angle = Math.atan2(sy - cy, sx - cx);
+
+  // Indicator sits on a ring at 82% of the smaller screen half
+  const R  = Math.min(cx, cy) * 0.82;
+  const ax = cx + Math.cos(angle) * R;
+  const ay = cy + Math.sin(angle) * R;
+
+  // Fade out when the target itself is clearly on screen
+  const onScreen = sx > 60 && sx < C.width-60 && sy > 60 && sy < C.height-60;
+
+  const dist  = Math.hypot(worldX - rkt.x, worldY - rkt.y);
+  const dStr  = dist >= 1e6 ? (dist/1e6).toFixed(1)+'M km'
+              : dist >= 1000 ? Math.round(dist/1000)+'k km'
+              : Math.round(dist)+' km';
+
+  X.save();
+  X.globalAlpha = onScreen ? 0.28 : 0.88;
+
+  // Arrow head pointing toward the target (rotate right-pointing arrow by `angle`)
+  X.save();
+  X.translate(ax, ay);
+  X.rotate(angle);
+  X.fillStyle = color;
+  X.beginPath();
+  X.moveTo(18, 0);
+  X.lineTo(-3, -9);
+  X.lineTo(-3,  9);
+  X.closePath();
+  X.fill();
+  X.restore();
+
+  // Label above, distance below (unrotated, always readable)
+  X.fillStyle = color;
+  X.textAlign = 'center';
+  X.font = 'bold 11px "Courier New",monospace';
+  X.fillText(label, ax, ay - 20);
+  X.font = '10px "Courier New",monospace';
+  X.fillText(dStr, ax, ay + 23);
+
+  X.restore();
+}
+
+// ── HUD ───────────────────────────────────────────────────────────────────────
 function drawHUD() {
   const dist = Math.hypot(rkt.x, rkt.y);
   const alt  = Math.max(0, dist - Re);
@@ -279,6 +340,7 @@ function drawHUD() {
   fb.style.background = fuel > 50 ? '#4c4' : fuel > 20 ? '#fa0' : '#f44';
 }
 
+// ── Overlay ───────────────────────────────────────────────────────────────────
 function overlay(t1, t2, t3, hint) {
   X.fillStyle = 'rgba(0,0,12,.65)';
   X.fillRect(0, 0, C.width, C.height);
@@ -290,31 +352,31 @@ function overlay(t1, t2, t3, hint) {
   X.fillStyle = '#fff';
   X.fillText(t1, cx, cy - 75);
 
-  if (t2) {
-    X.font = '21px "Courier New",monospace';
-    X.fillStyle = '#9df';
-    X.fillText(t2, cx, cy - 18);
-  }
-  if (t3) {
-    X.font = '17px "Courier New",monospace';
-    X.fillStyle = '#8cf';
-    X.fillText(t3, cx, cy + 22);
-  }
+  if (t2) { X.font = '21px "Courier New",monospace'; X.fillStyle = '#9df'; X.fillText(t2, cx, cy - 18); }
+  if (t3) { X.font = '17px "Courier New",monospace'; X.fillStyle = '#8cf'; X.fillText(t3, cx, cy + 22); }
   if (hint && Math.floor(Date.now()/600) % 2) {
-    X.font = 'bold 17px "Courier New",monospace';
-    X.fillStyle = '#ff0';
+    X.font = 'bold 17px "Courier New",monospace'; X.fillStyle = '#ff0';
     X.fillText(hint, cx, cy + 78);
   }
 }
 
 // ── Main loop ──────────────────────────────────────────────────────────────
+let t = 0;
 function loop() {
+  t += DT;
   update();
+
   drawBg();
-  drawStars();
+  drawBgStars(t);
+  drawWldStars();
   drawMoon();
   drawEarth();
   drawRocket();
+
+  // Direction indicators — always shown on top
+  drawDirIndicator(0, 0, '지구', '#4af');
+  drawDirIndicator(MOON.x, MOON.y, '달', '#ccc');
+
   drawHUD();
 
   if (phase === 'title') {
@@ -329,7 +391,7 @@ function loop() {
     overlay(
       '💥  충돌!',
       '최대 거리: ' + Math.floor(maxAlt).toLocaleString('ko-KR') + ' km',
-      '속도가 너무 빨라 지면에 충돌했습니다',
+      '너무 빠른 속도로 지면에 충돌했습니다',
       'SPACE 키로 다시 시작'
     );
   }
