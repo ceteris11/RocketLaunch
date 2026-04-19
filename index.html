@@ -63,23 +63,24 @@ addEventListener('resize', resize);
 const GM       = 398600;  // Earth gravitational parameter, km³/s²
 const Re       = 6371;    // Earth radius, km
 // Game-tuned: strong thrust, long fuel for satisfying feel
-const THRUST   = 5.0;     // km/s²  (was 0.3 — now clearly feels like acceleration)
+const THRUST   = 20.0;    // km/s²
 const ROT_SPD  = 3;       // deg/frame
 const DT       = 5/60;    // physics timestep (5× real-time for snappy feel)
 const FUEL_INIT  = 100;
 // Fuel lasts 120 real seconds of continuous thrust
 const FUEL_DRAIN = FUEL_INIT / (120 * 60);
 
-// ── Screen-space stars (always visible backdrop) ─────────────────────────────
-const BG_STARS = Array.from({length: 380}, () => ({
-  fx: Math.random(), fy: Math.random(),
-  r:  Math.random() * 1.8 + 0.4,
-  a:  Math.random() * 0.7 + 0.3,
-  tw: Math.random() * Math.PI * 2, // twinkle phase
+// ── Tiling world-space stars (scroll with rocket movement) ───────────────────
+const TILE_KM = 50000; // km — tile repeats every 50,000 km
+const TILE_STARS = Array.from({length: 300}, () => ({
+  tx: Math.random() * TILE_KM,
+  ty: Math.random() * TILE_KM,
+  r:  Math.random() * 1.6 + 0.3,
+  a:  Math.random() * 0.65 + 0.35,
 }));
 
 // ── Moon ────────────────────────────────────────────────────────────────────
-const MOON = { x: 0, y: -(Re + 80000), r: 1737 }; // game distance (real: 384,400 km)
+const MOON = { x: 0, y: -(Re + 384400), r: 1737 };
 
 // ── Game state ───────────────────────────────────────────────────────────────
 let phase = 'title';  // 'title' | 'play' | 'dead'
@@ -151,20 +152,41 @@ function update() {
   maxAlt = Math.max(maxAlt, Math.max(0, dist - Re));
 }
 
-// ── Draw: background + screen-space stars ────────────────────────────────────
+// ── Draw: background ─────────────────────────────────────────────────────────
 function drawBg() {
   X.fillStyle = '#00000d';
   X.fillRect(0, 0, C.width, C.height);
 }
 
-function drawBgStars(t) {
-  for (const s of BG_STARS) {
-    // Gentle twinkle
-    const alpha = s.a * (0.7 + 0.3 * Math.sin(t * 0.8 + s.tw));
-    X.beginPath();
-    X.arc(s.fx * C.width, s.fy * C.height, s.r, 0, Math.PI*2);
-    X.fillStyle = `rgba(255,255,255,${alpha.toFixed(2)})`;
-    X.fill();
+// Tiling star field — stars scroll 1:1 with rocket movement
+function drawScrollStars() {
+  const s      = getScale();
+  const tilePx = TILE_KM * s;
+
+  // Rocket's fractional position within current tile
+  const ox = ((rkt.x % TILE_KM) + TILE_KM) % TILE_KM;
+  const oy = ((rkt.y % TILE_KM) + TILE_KM) % TILE_KM;
+
+  const cols = Math.ceil(C.width  / tilePx) + 2;
+  const rows = Math.ceil(C.height / tilePx) + 2;
+
+  for (const st of TILE_STARS) {
+    const bx = C.width/2  + (st.tx - ox) * s;
+    const by = C.height/2 + (st.ty - oy) * s;
+    const i0 = Math.floor(-bx / tilePx);
+    const j0 = Math.floor(-by / tilePx);
+
+    for (let i = i0; i <= i0 + cols; i++) {
+      for (let j = j0; j <= j0 + rows; j++) {
+        const px = bx + i * tilePx;
+        const py = by + j * tilePx;
+        if (px < -2 || px > C.width+2 || py < -2 || py > C.height+2) continue;
+        X.beginPath();
+        X.arc(px, py, st.r, 0, Math.PI*2);
+        X.fillStyle = `rgba(255,255,255,${st.a})`;
+        X.fill();
+      }
+    }
   }
 }
 
@@ -337,13 +359,11 @@ function overlay(t1, t2, t3, hint) {
 }
 
 // ── Main loop ──────────────────────────────────────────────────────────────
-let t = 0;
 function loop() {
-  t += DT;
   update();
 
   drawBg();
-  drawBgStars(t);
+  drawScrollStars();
   drawMoon();
   drawEarth();
   drawRocket();
