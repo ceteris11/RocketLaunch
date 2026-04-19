@@ -28,6 +28,27 @@
       color:rgba(160,210,255,0.5); font-family:'Courier New',monospace;
       font-size:13px; pointer-events:none; text-align:center;
     }
+    #touch-controls {
+      position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+      display:none; gap:16px; align-items:center; z-index:10;
+    }
+    @media (pointer: coarse) {
+      #touch-controls { display:flex; }
+      #hint { display:none; }
+    }
+    .touch-btn {
+      width:76px; height:76px; border-radius:18px;
+      background:rgba(255,255,255,0.12);
+      border:2px solid rgba(255,255,255,0.28);
+      color:#fff; font-size:32px;
+      display:flex; align-items:center; justify-content:center;
+      user-select:none; -webkit-user-select:none;
+      touch-action:none; cursor:pointer;
+    }
+    .touch-btn.pressed {
+      background:rgba(255,255,255,0.30);
+      border-color:rgba(255,255,255,0.55);
+    }
   </style>
 </head>
 <body>
@@ -49,6 +70,11 @@
   </div>
 </div>
 <div id="hint">← → 방향 전환 &nbsp;|&nbsp; ↑ 가속</div>
+<div id="touch-controls">
+  <div id="btn-left"  class="touch-btn">◀</div>
+  <div id="btn-up"    class="touch-btn">▲</div>
+  <div id="btn-right" class="touch-btn">▶</div>
+</div>
 <script>
 'use strict';
 
@@ -107,6 +133,31 @@ addEventListener('keydown', e => {
   if (phase === 'dead' && e.key === ' ') { spawnRocket(); phase = 'play'; }
 });
 addEventListener('keyup', e => { K[e.key] = false; });
+
+// Touch controls
+;(function() {
+  function bind(id, key) {
+    const el = document.getElementById(id);
+    el.addEventListener('touchstart', e => {
+      e.preventDefault();
+      K[key] = true;
+      el.classList.add('pressed');
+      if (phase === 'title') phase = 'play';
+    }, {passive: false});
+    const release = e => { e.preventDefault(); K[key] = false; el.classList.remove('pressed'); };
+    el.addEventListener('touchend',    release, {passive: false});
+    el.addEventListener('touchcancel', release, {passive: false});
+  }
+  bind('btn-left',  'ArrowLeft');
+  bind('btn-up',    'ArrowUp');
+  bind('btn-right', 'ArrowRight');
+
+  // Tap canvas to start / restart
+  C.addEventListener('touchstart', () => {
+    if (phase === 'title') phase = 'play';
+    if (phase === 'dead')  { spawnRocket(); phase = 'play'; }
+  }, {passive: true});
+})();
 
 // ── Viewport ─────────────────────────────────────────────────────────────────
 function getScale() {
