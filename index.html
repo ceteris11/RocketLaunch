@@ -78,17 +78,6 @@ const BG_STARS = Array.from({length: 380}, () => ({
   tw: Math.random() * Math.PI * 2, // twinkle phase
 }));
 
-// ── World-space stars (give parallax as rocket moves) ────────────────────────
-const WLD_STARS = Array.from({length: 90}, () => {
-  const ang  = Math.random() * Math.PI * 2;
-  const dist = Re * (2 + Math.random() * 9); // 2–11× Re from Earth
-  return {
-    x: Math.cos(ang) * dist, y: Math.sin(ang) * dist,
-    r: Math.random() * 2.5 + 0.8,
-    a: Math.random() * 0.55 + 0.25,
-  };
-});
-
 // ── Moon ────────────────────────────────────────────────────────────────────
 const MOON = { x: 0, y: -(Re + 80000), r: 1737 }; // game distance (real: 384,400 km)
 
@@ -176,18 +165,6 @@ function drawBgStars(t) {
     X.beginPath();
     X.arc(s.fx * C.width, s.fy * C.height, s.r, 0, Math.PI*2);
     X.fillStyle = `rgba(255,255,255,${alpha.toFixed(2)})`;
-    X.fill();
-  }
-}
-
-// ── Draw: world-space stars (parallax) ───────────────────────────────────────
-function drawWldStars() {
-  for (const s of WLD_STARS) {
-    const [sx, sy] = w2s(s.x, s.y);
-    if (sx < -4 || sx > C.width+4 || sy < -4 || sy > C.height+4) continue;
-    X.beginPath();
-    X.arc(sx, sy, s.r, 0, Math.PI*2);
-    X.fillStyle = `rgba(255,255,255,${s.a})`;
     X.fill();
   }
 }
@@ -368,7 +345,6 @@ function loop() {
 
   drawBg();
   drawBgStars(t);
-  drawWldStars();
   drawMoon();
   drawEarth();
   drawRocket();
