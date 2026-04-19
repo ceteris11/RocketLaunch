@@ -65,7 +65,7 @@ const Re       = 6371;    // Earth radius, km
 // Game-tuned: strong thrust, long fuel for satisfying feel
 const THRUST   = 5.0;     // km/s²  (was 0.3 — now clearly feels like acceleration)
 const ROT_SPD  = 3;       // deg/frame
-const DT       = 1/60;    // physics timestep (real-time)
+const DT       = 5/60;    // physics timestep (5× real-time for snappy feel)
 const FUEL_INIT  = 100;
 // Fuel lasts 120 real seconds of continuous thrust
 const FUEL_DRAIN = FUEL_INIT / (120 * 60);
@@ -90,7 +90,7 @@ const WLD_STARS = Array.from({length: 90}, () => {
 });
 
 // ── Moon ────────────────────────────────────────────────────────────────────
-const MOON = { x: 0, y: -(Re + 384400), r: 1737 };
+const MOON = { x: 0, y: -(Re + 80000), r: 1737 }; // game distance (real: 384,400 km)
 
 // ── Game state ───────────────────────────────────────────────────────────────
 let phase = 'title';  // 'title' | 'play' | 'dead'
