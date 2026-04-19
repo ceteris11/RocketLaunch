@@ -68,7 +68,10 @@ const ROT_SPD  = 3;       // deg/frame
 const DT       = 5/60;    // physics timestep (5× real-time for snappy feel)
 const FUEL_INIT  = 100;
 // Fuel lasts 120 real seconds of continuous thrust
-const FUEL_DRAIN = FUEL_INIT / (120 * 60);
+const FUEL_DRAIN  = FUEL_INIT / (120 * 60);
+const GM_MOON     = 4902.8;          // Moon gravitational parameter, km³/s²
+const LAND_SPD    = 3;               // max safe landing speed, km/s
+const FUEL_REFILL = FUEL_INIT / (5 * 60); // refuel rate: full in ~5 real seconds
 
 // ── Tiling world-space stars (scroll with rocket movement) ───────────────────
 const TILE_KM = 50000; // km — tile repeats every 50,000 km
@@ -84,12 +87,13 @@ const MOON = { x: 0, y: -(Re + 384400), r: 1737 };
 
 // ── Game state ───────────────────────────────────────────────────────────────
 let phase = 'title';  // 'title' | 'play' | 'dead'
-let fuel, maxAlt, rkt;
+let fuel, maxAlt, rkt, landedOn;
 
 function spawnRocket() {
-  rkt    = { x:0, y:-(Re+10), vx:0, vy:0, angle:0, fire:false };
-  fuel   = FUEL_INIT;
-  maxAlt = 0;
+  rkt      = { x:0, y:-(Re+10), vx:0, vy:0, angle:0, fire:false };
+  fuel     = FUEL_INIT;
+  maxAlt   = 0;
+  landedOn = null;
 }
 spawnRocket();
 
@@ -116,9 +120,52 @@ function w2s(wx, wy) {
 }
 
 // ── Physics ───────────────────────────────────────────────────────────────────
+
+// Place rocket on surface, pointing outward
+function landOn(planet) {
+  const cx = planet === 'moon' ? MOON.x : 0;
+  const cy = planet === 'moon' ? MOON.y : 0;
+  const pr = planet === 'moon' ? MOON.r  : Re;
+  const dx = rkt.x - cx, dy = rkt.y - cy;
+  const d  = Math.hypot(dx, dy);
+  const nx = dx/d, ny = dy/d;
+  rkt.x  = cx + nx * (pr + 0.5);
+  rkt.y  = cy + ny * (pr + 0.5);
+  rkt.vx = 0; rkt.vy = 0;
+  rkt.fire  = false;
+  rkt.angle = Math.atan2(ny, nx) * 180 / Math.PI + 90;
+  landedOn  = planet;
+}
+
+// True if rocket is within ~20° of the base on its planet
+function nearBase(planet) {
+  if (planet === 'earth') {
+    const ny = rkt.y / Math.hypot(rkt.x, rkt.y);
+    return ny < -0.94;  // top of Earth (facing Moon)
+  }
+  const dy = rkt.y - MOON.y;
+  const d  = Math.hypot(rkt.x - MOON.x, dy);
+  return (dy / d) > 0.94; // Earth-facing side of Moon
+}
+
 function update() {
   if (phase !== 'play') return;
 
+  // ── Landed state ──
+  if (landedOn) {
+    if (nearBase(landedOn) && fuel < FUEL_INIT)
+      fuel = Math.min(FUEL_INIT, fuel + FUEL_REFILL);
+    if (K['ArrowUp'] && fuel > 0) {
+      const cx = landedOn === 'moon' ? MOON.x : 0;
+      const cy = landedOn === 'moon' ? MOON.y : 0;
+      const dx = rkt.x - cx, dy = rkt.y - cy, d = Math.hypot(dx, dy);
+      rkt.vx = dx/d * 2; rkt.vy = dy/d * 2;
+      landedOn = null;
+    }
+    return;
+  }
+
+  // ── Flight ──
   if (K['ArrowLeft'])  rkt.angle -= ROT_SPD;
   if (K['ArrowRight']) rkt.angle += ROT_SPD;
 
@@ -130,26 +177,34 @@ function update() {
     fuel = Math.max(0, fuel - FUEL_DRAIN);
   }
 
-  // Gravity: a = GM/r² toward Earth
-  const r = Math.hypot(rkt.x, rkt.y);
-  const g = GM / (r * r);
-  rkt.vx -= (rkt.x / r) * g * DT;
-  rkt.vy -= (rkt.y / r) * g * DT;
+  // Earth gravity
+  const r  = Math.hypot(rkt.x, rkt.y);
+  rkt.vx  -= (rkt.x / r) * GM       / (r * r) * DT;
+  rkt.vy  -= (rkt.y / r) * GM       / (r * r) * DT;
+
+  // Moon gravity
+  const mdx = rkt.x - MOON.x, mdy = rkt.y - MOON.y;
+  const mr  = Math.hypot(mdx, mdy);
+  rkt.vx   -= (mdx / mr) * GM_MOON  / (mr* mr) * DT;
+  rkt.vy   -= (mdy / mr) * GM_MOON  / (mr* mr) * DT;
 
   rkt.x += rkt.vx * DT;
   rkt.y += rkt.vy * DT;
 
-  // Earth surface collision
-  const dist = Math.hypot(rkt.x, rkt.y);
-  if (dist < Re) {
-    if (Math.hypot(rkt.vx, rkt.vy) > 1) { phase = 'dead'; return; }
-    const nx = rkt.x/dist, ny = rkt.y/dist;
-    rkt.x = nx*(Re+0.5); rkt.y = ny*(Re+0.5);
-    const vn = rkt.vx*nx + rkt.vy*ny;
-    if (vn < 0) { rkt.vx -= vn*nx; rkt.vy -= vn*ny; }
+  // Collision — recompute distances after move
+  const earthDist = Math.hypot(rkt.x, rkt.y);
+  const moonDist  = Math.hypot(rkt.x - MOON.x, rkt.y - MOON.y);
+
+  if (earthDist < Re) {
+    if (Math.hypot(rkt.vx, rkt.vy) > LAND_SPD) { phase = 'dead'; return; }
+    landOn('earth'); return;
+  }
+  if (moonDist < MOON.r) {
+    if (Math.hypot(rkt.vx, rkt.vy) > LAND_SPD) { phase = 'dead'; return; }
+    landOn('moon'); return;
   }
 
-  maxAlt = Math.max(maxAlt, Math.max(0, dist - Re));
+  maxAlt = Math.max(maxAlt, earthDist - Re);
 }
 
 // ── Draw: background ─────────────────────────────────────────────────────────
@@ -236,6 +291,44 @@ function drawMoon() {
   g.addColorStop(1, '#606060');
   X.beginPath(); X.arc(mx, my, mr, 0, Math.PI*2);
   X.fillStyle = g; X.fill();
+}
+
+// ── Draw: Landing bases ───────────────────────────────────────────────────────
+function drawBase(wx, wy, nx, ny, color) {
+  const [sx, sy] = w2s(wx, wy);
+  if (Math.abs(sx - C.width/2)  > C.width  + 60) return;
+  if (Math.abs(sy - C.height/2) > C.height + 60) return;
+
+  // Rotate pad to lie tangent to surface (local -y = away from planet)
+  const angle = Math.atan2(nx, -ny);
+  X.save();
+  X.translate(sx, sy);
+  X.rotate(angle);
+
+  // Base structure
+  X.fillStyle = '#444';
+  X.fillRect(-22, -5, 44, 5);
+  // Landing strip
+  X.fillStyle = color;
+  X.fillRect(-18, -8, 36, 3);
+  // Beacon lights
+  X.fillStyle = '#ff0';
+  X.beginPath(); X.arc(-16, -11, 3, 0, Math.PI*2); X.fill();
+  X.beginPath(); X.arc( 16, -11, 3, 0, Math.PI*2); X.fill();
+  // Label
+  X.fillStyle = '#fff';
+  X.font = 'bold 9px monospace';
+  X.textAlign = 'center';
+  X.fillText('기지', 0, -17);
+
+  X.restore();
+}
+
+function drawBases() {
+  // Earth base: top of Earth, normal = (0, -1)
+  drawBase(0, -Re, 0, -1, '#4af');
+  // Moon base: Earth-facing side, normal = (0, +1) from Moon center
+  drawBase(MOON.x, MOON.y + MOON.r, 0, 1, '#fa4');
 }
 
 // ── Draw: Rocket ──────────────────────────────────────────────────────────────
@@ -366,6 +459,7 @@ function loop() {
   drawScrollStars();
   drawMoon();
   drawEarth();
+  drawBases();
   drawRocket();
 
   // Direction indicators — always shown on top
@@ -373,6 +467,27 @@ function loop() {
   drawDirIndicator(MOON.x, MOON.y, '달', '#ccc');
 
   drawHUD();
+
+  // Landing status banner
+  if (landedOn && phase === 'play') {
+    const atB = nearBase(landedOn);
+    const refueling = atB && fuel < FUEL_INIT;
+    const msg = refueling         ? '⛽  연료 충전 중...'
+              : atB               ? '✅  기지 — 연료 충전 완료'
+              : landedOn==='moon' ? '🌙  달 착륙'
+                                  : '🌍  지구 착륙';
+    X.save();
+    X.fillStyle = 'rgba(0,10,30,0.8)';
+    X.fillRect(C.width/2 - 210, C.height - 82, 420, 58);
+    X.textAlign = 'center';
+    X.font = 'bold 18px "Courier New",monospace';
+    X.fillStyle = refueling ? '#fa0' : '#4f4';
+    X.fillText(msg, C.width/2, C.height - 52);
+    X.font = '12px "Courier New",monospace';
+    X.fillStyle = 'rgba(180,210,255,0.7)';
+    X.fillText('↑ 키를 눌러 이륙', C.width/2, C.height - 32);
+    X.restore();
+  }
 
   if (phase === 'title') {
     overlay(
