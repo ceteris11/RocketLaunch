@@ -68,7 +68,7 @@ const ROT_SPD  = 3;       // deg/frame
 const DT       = 5/60;    // physics timestep (5× real-time for snappy feel)
 const FUEL_INIT  = 100;
 // Fuel lasts 120 real seconds of continuous thrust
-const FUEL_DRAIN  = FUEL_INIT / (120 * 60);
+const FUEL_DRAIN  = FUEL_INIT / (60 * 60);
 const GM_MOON     = 4902.8;          // Moon gravitational parameter, km³/s²
 const LAND_SPD    = 30;              // max safe landing speed, km/s
 const FUEL_REFILL = FUEL_INIT / (5 * 60); // refuel rate: full in ~5 real seconds
@@ -130,8 +130,8 @@ function landOn(planet) {
   const dx = rkt.x - cx, dy = rkt.y - cy;
   const d  = Math.hypot(dx, dy);
   const nx = dx/d, ny = dy/d;
-  // Offset: rocket engine (14px below center) sits on base top (8px above surface)
-  const baseKm = 22 / getScale();
+  // Engine (14px) sits at pole-cap level (16px from surface); fins (22px) clear surface by 8px
+  const baseKm = 30 / getScale();
   rkt.x  = cx + nx * (pr + baseKm);
   rkt.y  = cy + ny * (pr + baseKm);
   rkt.vx = 0; rkt.vy = 0;
@@ -358,21 +358,24 @@ function drawBase(wx, wy, nx, ny, color) {
   X.translate(sx, sy);
   X.rotate(angle);
 
-  // Base structure
-  X.fillStyle = '#444';
-  X.fillRect(-22, -5, 44, 5);
-  // Landing strip
+  // Pole (4px wide — fits between fin roots at ±7px)
+  X.fillStyle = '#555';
+  X.fillRect(-2, -16, 4, 16);
+  // Cap at engine level (14px wide — matches rocket body width)
+  X.fillStyle = '#666';
+  X.fillRect(-7, -18, 14, 2);
+  // Colored strip
   X.fillStyle = color;
-  X.fillRect(-18, -8, 36, 3);
-  // Beacon lights
+  X.fillRect(-7, -19, 14, 1);
+  // Beacon lights (at ±10px, outside cap)
   X.fillStyle = '#ff0';
-  X.beginPath(); X.arc(-16, -11, 3, 0, Math.PI*2); X.fill();
-  X.beginPath(); X.arc( 16, -11, 3, 0, Math.PI*2); X.fill();
+  X.beginPath(); X.arc(-10, -17, 2.5, 0, Math.PI*2); X.fill();
+  X.beginPath(); X.arc( 10, -17, 2.5, 0, Math.PI*2); X.fill();
   // Label
   X.fillStyle = '#fff';
   X.font = 'bold 9px monospace';
   X.textAlign = 'center';
-  X.fillText('기지', 0, -17);
+  X.fillText('기지', 0, -26);
 
   X.restore();
 }
@@ -500,7 +503,7 @@ function overlay(t1, t2, t3, hint) {
   if (t3) { X.font = '17px "Courier New",monospace'; X.fillStyle = '#8cf'; X.fillText(t3, cx, cy + 22); }
   if (hint && Math.floor(Date.now()/600) % 2) {
     X.font = 'bold 17px "Courier New",monospace'; X.fillStyle = '#ff0';
-    X.fillText(hint, cx, cy + 78);
+    X.fillText(hint, cx, cy + 100);
   }
 }
 
@@ -550,6 +553,13 @@ function loop() {
       '↑ 가속 (연료 소모)   ← → 방향 전환',
       '아무 키나 눌러 시작'
     );
+    const cx = C.width/2, cy = C.height/2;
+    X.textAlign = 'center';
+    X.font = '14px "Courier New",monospace';
+    X.fillStyle = '#aef';
+    X.fillText('기지에 착륙하면 연료를 충전할 수 있습니다.', cx, cy + 44);
+    X.fillStyle = '#f99';
+    X.fillText('30 km/s 초과 속도로 착륙하면 충돌합니다.', cx, cy + 62);
   }
   if (phase === 'dead') {
     overlay(
