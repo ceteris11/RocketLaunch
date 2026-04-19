@@ -36,6 +36,14 @@
       #touch-controls { display:flex; }
       #hint { display:none; }
     }
+    @media (max-width: 480px) {
+      #hud { padding:8px 8px; gap:6px; }
+      .card { padding:6px 8px; min-width:0; flex:1; }
+      .lbl { font-size:8px; letter-spacing:1px; margin-bottom:2px; }
+      .val { font-size:14px; }
+      .touch-btn { width:64px; height:64px; font-size:26px; border-radius:14px; }
+      #touch-controls { gap:12px; bottom:16px; }
+    }
     .touch-btn {
       width:76px; height:76px; border-radius:18px;
       background:rgba(255,255,255,0.12);
