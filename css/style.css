@@ -1,0 +1,83 @@
+/* ============================================================================
+   RocketLaunch — styles
+   ────────────────────────────────────────────────────────────────────────────
+   Layout: full-viewport canvas behind, HUD overlays on top (pointer-events:none
+   so clicks go through to the canvas where relevant).
+
+   Breakpoints:
+     (pointer: coarse)  — show touch controls (phones/tablets)
+     (max-width: 480px) — compact HUD for narrow screens
+   ============================================================================ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body   { background: #000; overflow: hidden; }
+canvas { display: block; }
+
+/* ── HUD (top banner cards) ───────────────────────────────────────────────── */
+#hud {
+  position: fixed; top: 0; left: 0; right: 0;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 14px 18px;
+  pointer-events: none;
+}
+.card {
+  background: rgba(0, 8, 24, 0.82);
+  border: 1px solid rgba(80, 180, 255, 0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: 'Courier New', monospace;
+  color: #cef;
+  min-width: 140px;
+}
+.lbl { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #89d; margin-bottom: 3px; }
+.val { font-size: 20px; font-weight: bold; color: #fff; }
+
+/* Fuel bar */
+#fbar-track { background: rgba(255, 255, 255, 0.15); border-radius: 3px; height: 5px; margin-top: 4px; }
+#fbar       { height: 5px; border-radius: 3px; width: 100%; transition: background .3s; }
+
+/* ── On-screen hint text ──────────────────────────────────────────────────── */
+#hint {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  color: rgba(160, 210, 255, 0.5);
+  font-family: 'Courier New', monospace; font-size: 13px;
+  pointer-events: none;
+  text-align: center;
+}
+
+/* ── Touch controls (mobile D-pad) ────────────────────────────────────────── */
+#touch-controls {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  display: none;   /* shown via media query below */
+  gap: 16px; align-items: center;
+  z-index: 10;
+}
+.touch-btn {
+  width: 76px; height: 76px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  color: #fff; font-size: 32px;
+  display: flex; align-items: center; justify-content: center;
+  user-select: none; -webkit-user-select: none;
+  touch-action: none; cursor: pointer;
+}
+.touch-btn.pressed {
+  background: rgba(255, 255, 255, 0.30);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+@media (pointer: coarse) {
+  #touch-controls { display: flex; }
+  #hint           { display: none; }
+}
+
+@media (max-width: 480px) {
+  #hud       { padding: 8px 8px; gap: 6px; }
+  .card      { padding: 6px 8px; min-width: 0; flex: 1; }
+  .lbl       { font-size: 8px;  letter-spacing: 1px; margin-bottom: 2px; }
+  .val       { font-size: 14px; }
+  .touch-btn { width: 64px; height: 64px; font-size: 26px; border-radius: 14px; }
+  #touch-controls { gap: 12px; bottom: 16px; }
+}
