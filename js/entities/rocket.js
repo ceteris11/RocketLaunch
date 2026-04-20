@@ -24,8 +24,18 @@ import {
   THRUST, ROT_SPD, DT,
   FUEL_INIT, FUEL_DRAIN, FUEL_REFILL,
   LAND_SPD, BASE_SPAWN_PX,
+  ROCKET_NOSE_PX, ROCKET_TAIL_PX, ROCKET_HALFWIDTH_PX,
 } from '../config.js';
 import { getScale } from '../camera.js';
+
+// Shortest distance from point (px,py) to segment (ax,ay)-(bx,by).
+function distPointSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const L2 = dx * dx + dy * dy;
+  const t  = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L2));
+  const cx = ax + t * dx, cy = ay + t * dy;
+  return Math.hypot(px - cx, py - cy);
+}
 
 export class Rocket {
   /** @param {CelestialBody} homeBody  where this rocket's altitude is measured from */
@@ -114,16 +124,36 @@ export class Rocket {
     const homeDist = Math.hypot(this.x - this.homeBody.x, this.y - this.homeBody.y);
     this.maxAlt = Math.max(this.maxAlt, homeDist - this.homeBody.radius);
 
-    // Collision — first body hit wins
+    // Collision — treat rocket as a capsule (nose→tail segment + body half-width).
+    // First body hit wins.
+    const { nx1, ny1, nx2, ny2 } = this._endpoints();
+    const halfWidthKm = ROCKET_HALFWIDTH_PX / getScale();
     for (const b of bodies) {
-      const d = Math.hypot(this.x - b.x, this.y - b.y);
-      if (d < b.radius) {
+      const d = distPointSegment(b.x, b.y, nx1, ny1, nx2, ny2);
+      if (d < b.radius + halfWidthKm) {
         if (Math.hypot(this.vx, this.vy) > LAND_SPD) return 'crash';
         this._landOn(b);
         return { type: 'land', body: b };
       }
     }
     return null;
+  }
+
+  /**
+   * Nose and tail endpoints in world km, based on current angle + viewport scale.
+   * Rotation matches thrust math in _stepFlight: local -y (nose) direction in
+   * world space is (cos(angle-90), sin(angle-90)).
+   */
+  _endpoints() {
+    const s = getScale();
+    const noseKm = ROCKET_NOSE_PX / s;
+    const tailKm = ROCKET_TAIL_PX / s;
+    const rad = (this.angle - 90) * Math.PI / 180;
+    const ux  = Math.cos(rad), uy = Math.sin(rad);
+    return {
+      nx1: this.x + ux * noseKm, ny1: this.y + uy * noseKm,
+      nx2: this.x - ux * tailKm, ny2: this.y - uy * tailKm,
+    };
   }
 
   /**
@@ -139,9 +169,12 @@ export class Rocket {
     const d  = Math.hypot(dx, dy);
     const nx = dx / d, ny = dy / d;
 
-    const baseKm = BASE_SPAWN_PX / getScale();
-    this.x = body.x + nx * (body.radius + baseKm);
-    this.y = body.y + ny * (body.radius + baseKm);
+    const s      = getScale();
+    const baseKm = BASE_SPAWN_PX  / s;
+    const tailKm = ROCKET_TAIL_PX / s;
+    // Tail sits at body.radius + baseKm; center is one tail-length further out.
+    this.x = body.x + nx * (body.radius + baseKm + tailKm);
+    this.y = body.y + ny * (body.radius + baseKm + tailKm);
     this.vx = 0; this.vy = 0;
     this.fire = false;
     // Face outward: local "up" (-y) of the sprite aligns with the outward normal

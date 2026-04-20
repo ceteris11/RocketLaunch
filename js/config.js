@@ -36,3 +36,10 @@ export const NUM_STARS          = 300;     // number of stars per tile
 export const BASE_PROXIMITY     = 0.94;    // cos(θ) threshold for "near base" (~20° cone)
 export const BASE_SPAWN_PX      = 30;      // rocket spawn height above surface in screen pixels
                                            // (converted to km via camera scale — legacy behavior)
+
+// ── Rocket shape (px, must match render/rocket.js sprite) ─────────────────
+// Used for capsule-based collision: nose→tail segment + body half-width.
+// Fins are cosmetic and excluded from collision.
+export const ROCKET_NOSE_PX      = 22;     // center → nose tip
+export const ROCKET_TAIL_PX      = 14;     // center → tail midpoint
+export const ROCKET_HALFWIDTH_PX = 7;      // body half-width at the tail
