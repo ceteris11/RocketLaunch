@@ -68,8 +68,11 @@ canvas { display: block; }
 
 /* Minimap header row: label + zoom buttons */
 .mini-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.mini-zoom   { display: flex; gap: 2px; pointer-events: auto; }
-.mini-zoom button {
+
+/* Shared style for tabbed button groups (minimap zoom, time-speed, view-scale). */
+.mini-zoom, .time-speed, .view-scale { display: flex; gap: 2px; pointer-events: auto; }
+.time-speed                          { margin-top: 3px; justify-content: flex-end; }
+.mini-zoom button, .time-speed button, .view-scale button {
   background: rgba(80, 180, 255, 0.1);
   border: 1px solid rgba(80, 180, 255, 0.3);
   color: #89d;
@@ -79,8 +82,8 @@ canvas { display: block; }
   border-radius: 3px;
   cursor: pointer;
 }
-.mini-zoom button:hover  { background: rgba(80, 180, 255, 0.25); }
-.mini-zoom button.active { background: rgba(80, 180, 255, 0.4); color: #fff; border-color: rgba(80, 180, 255, 0.8); }
+.mini-zoom button:hover,  .time-speed button:hover,  .view-scale button:hover  { background: rgba(80, 180, 255, 0.25); }
+.mini-zoom button.active, .time-speed button.active, .view-scale button.active { background: rgba(80, 180, 255, 0.4); color: #fff; border-color: rgba(80, 180, 255, 0.8); }
 
 /* ── On-screen hint text ──────────────────────────────────────────────────── */
 #hint {
@@ -89,6 +92,15 @@ canvas { display: block; }
   font-family: 'Courier New', monospace; font-size: 13px;
   pointer-events: none;
   text-align: center;
+}
+
+/* ── Visitor counter (bottom-left) ────────────────────────────────────────── */
+#visitor-count {
+  position: fixed; bottom: 14px; left: 16px;
+  color: rgba(160, 210, 255, 0.55);
+  font-family: 'Courier New', monospace; font-size: 12px;
+  pointer-events: none;
+  z-index: 5;
 }
 
 /* ── Touch controls (mobile D-pad) ────────────────────────────────────────── */

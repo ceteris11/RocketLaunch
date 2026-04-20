@@ -130,8 +130,10 @@ export function updateMinimap(rkt, bodies) {
 /**
  * Draw a labelled arrow on the screen edge pointing at (worldX, worldY).
  * Fades when the target is already comfortably on-screen.
+ * `radius` is the target body's radius — subtracted from the raw distance so
+ * the label reflects surface-to-rocket distance, not center-to-rocket.
  */
-export function drawDirIndicator(X, canvas, rkt, worldX, worldY, label, color) {
+export function drawDirIndicator(X, canvas, rkt, worldX, worldY, label, color, radius = 0) {
   const [sx, sy] = w2s(worldX, worldY);
   const cx = canvas.width / 2, cy = canvas.height / 2;
 
@@ -145,7 +147,7 @@ export function drawDirIndicator(X, canvas, rkt, worldX, worldY, label, color) {
 
   const onScreen = sx > 60 && sx < canvas.width - 60 && sy > 60 && sy < canvas.height - 60;
 
-  const dist = Math.hypot(worldX - rkt.x, worldY - rkt.y);
+  const dist = Math.max(0, Math.hypot(worldX - rkt.x, worldY - rkt.y) - radius);
   const dStr = dist >= 1e6  ? (dist / 1e6).toFixed(1) + 'M km'
              : dist >= 1000 ? Math.round(dist / 1000) + 'k km'
              :                Math.round(dist) + ' km';
@@ -176,7 +178,7 @@ export function drawDirIndicator(X, canvas, rkt, worldX, worldY, label, color) {
 export function drawAllDirIndicators(X, canvas, rkt, bodies, skip = null) {
   for (const b of bodies) {
     if (b === skip) continue;
-    drawDirIndicator(X, canvas, rkt, b.x, b.y, b.displayName, b.indicatorColor);
+    drawDirIndicator(X, canvas, rkt, b.x, b.y, b.displayName, b.indicatorColor, b.radius);
   }
 }
 
