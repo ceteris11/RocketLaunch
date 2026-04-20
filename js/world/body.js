@@ -56,6 +56,7 @@ export class CelestialBody {
     this.indicatorColor = indicatorColor;
 
     this.x = x; this.y = y;
+    this.vx = 0; this.vy = 0;     // world-frame velocity from orbital motion
     this.radius = radius;
     this.gm = gm;
     this.renderStyle = renderStyle;
@@ -79,8 +80,13 @@ export class CelestialBody {
   updateOrbit(tSec) {
     if (!this.parent) return;
     const a = this.orbitPhase + this.orbitAngularVel * tSec;
-    this.x = this.parent.x + Math.cos(a) * this.orbitRadius;
-    this.y = this.parent.y + Math.sin(a) * this.orbitRadius;
+    const r = this.orbitRadius;
+    const w = this.orbitAngularVel;
+    this.x = this.parent.x + Math.cos(a) * r;
+    this.y = this.parent.y + Math.sin(a) * r;
+    // Tangential world-frame velocity, inherited from parent for nested orbits.
+    this.vx = this.parent.vx - Math.sin(a) * w * r;
+    this.vy = this.parent.vy + Math.cos(a) * w * r;
   }
 
   /** World-space position of the landing base, or null if no base. */

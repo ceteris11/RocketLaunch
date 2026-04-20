@@ -63,7 +63,7 @@ import { BODIES, EARTH }          from './world/bodies.js';
 import { Rocket }                 from './entities/rocket.js';
 import { Explosion }              from './entities/explosion.js';
 import { initInput, readCommands, CMD } from './input.js';
-import { initCamera, setViewMultiplier } from './camera.js';
+import { initCamera, setTarget, setViewMultiplier } from './camera.js';
 import { drawBackground }         from './render/background.js';
 import { drawBodies, drawBases }  from './render/bodies.js';
 import { drawRocket }             from './render/rocket.js';
@@ -83,7 +83,11 @@ addEventListener('resize', resize);
 // ─── Game state ──────────────────────────────────────────────────────────────
 // Kept here because the set is small and only this file mutates `phase`.
 // For multiplayer, promote this to a World class (see header comment).
+// Canvas must be wired into camera first: Rocket.reset() reads getBaseScale()
+// to size its surface offset, which depends on canvas.width/height.
+initCamera(canvas, null);
 const rocket   = new Rocket(EARTH);
+setTarget(rocket);
 let   phase    = 'title';   // 'title' | 'play' | 'dead'
 let   explosion = null;
 let   gameTime = 0;         // seconds since game start — drives body orbits
@@ -100,8 +104,6 @@ if (timeSpeedEl) {
     timeSpeedEl.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
   });
 }
-
-initCamera(canvas, rocket);
 
 // Main-view zoom: 1× default, higher multipliers shrink world → fit big bodies.
 const viewScaleEl = document.getElementById('view-scale');
