@@ -69,7 +69,7 @@ import { drawBodies, drawBases }  from './render/bodies.js';
 import { drawRocket }             from './render/rocket.js';
 import { drawExplosion }          from './render/explosion.js';
 import {
-  updateHUD, drawAllDirIndicators, drawOverlay, drawLandedBanner,
+  updateHUD, updateMinimap, drawAllDirIndicators, drawOverlay, drawLandedBanner,
 } from './render/hud.js';
 
 // ─── Canvas setup ────────────────────────────────────────────────────────────
@@ -144,6 +144,7 @@ function draw() {
   drawAllDirIndicators(ctx, canvas, rocket, BODIES, null);
 
   updateHUD(rocket, EARTH);
+  updateMinimap(rocket, BODIES);
 
   if (phase === 'play')  drawLandedBanner(ctx, canvas, rocket);
   if (phase === 'title') drawTitleScreen();
@@ -155,15 +156,15 @@ function drawTitleScreen() {
   drawOverlay(ctx, canvas,
     '🚀  ROCKET LAUNCH',
     '지구에서 로켓을 쏴 우주를 탐험하세요!',
-    '↑ 가속 (연료 소모)   ← → 방향 전환',
+    '↑ 가속   ← → 방향 전환   ↓ 브레이크',
     '아무 키나 눌러 시작');
 
   // Extra hint lines specific to the title screen
   const cx = canvas.width / 2, cy = canvas.height / 2;
   ctx.textAlign = 'center';
   ctx.font = '14px "Courier New",monospace';
-  ctx.fillStyle = '#aef'; ctx.fillText('기지에 착륙하면 연료를 충전할 수 있습니다.', cx, cy + 44);
-  ctx.fillStyle = '#f99'; ctx.fillText('30 km/s 초과 속도로 착륙하면 충돌합니다.', cx, cy + 62);
+  ctx.fillStyle = '#ff8'; ctx.fillText('⚡ Shift 키로 하이퍼드라이브 (빛의 속도)', cx, cy + 44);
+  ctx.fillStyle = '#f99'; ctx.fillText('300 km/s 초과 속도로 착륙하면 충돌합니다.', cx, cy + 62);
 }
 
 function drawDeadScreen() {

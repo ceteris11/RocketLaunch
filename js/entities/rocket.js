@@ -22,8 +22,7 @@
 
 import {
   THRUST, ROT_SPD, DT,
-  FUEL_INIT, FUEL_DRAIN, FUEL_REFILL,
-  LAND_SPD, BASE_SPAWN_PX,
+  LAND_SPD, SPEED_OF_LIGHT, BASE_SPAWN_PX,
   ROCKET_NOSE_PX, ROCKET_TAIL_PX, ROCKET_HALFWIDTH_PX,
 } from '../config.js';
 import { getScale } from '../camera.js';
@@ -55,9 +54,14 @@ export class Rocket {
     this.y  = this.homeBody.y + ny * (this.homeBody.radius + 10);
     this.vx = 0; this.vy = 0;
 
-    this.angle    = 0;
-    this.fire     = false;
-    this.fuel     = FUEL_INIT;
+    this.angle      = 0;
+    this.fire       = false;
+    this.brake      = false;
+    this.hyperdrive = false;
+    // Pre-hyperdrive velocity, restored on release
+    this._preHyperVx    = 0;
+    this._preHyperVy    = 0;
+    this._wasHyperdrive = false;
     this.maxAlt   = 0;
     this.landedOn = null;     // CelestialBody | null
   }
@@ -76,12 +80,8 @@ export class Rocket {
 
   // ── Landed sub-step ──────────────────────────────────────────────────────
   _stepLanded(cmd) {
-    // Refuel only when parked over the base
-    if (this.landedOn.nearBaseFrom(this.x, this.y) && this.fuel < FUEL_INIT)
-      this.fuel = Math.min(FUEL_INIT, this.fuel + FUEL_REFILL);
-
-    // Takeoff: small radial kick outward
-    if (cmd.thrust && this.fuel > 0) {
+    // Takeoff: small radial kick outward (thrust or hyperdrive both launch)
+    if (cmd.thrust || cmd.hyperdrive) {
       const body = this.landedOn;
       const dx = this.x - body.x, dy = this.y - body.y;
       const d  = Math.hypot(dx, dy);
@@ -98,12 +98,19 @@ export class Rocket {
     if (cmd.right) this.angle += ROT_SPD;
 
     // Thrust along current heading
-    this.fire = !!cmd.thrust && this.fuel > 0;
+    this.fire = !!cmd.thrust;
     if (this.fire) {
       const rad = (this.angle - 90) * Math.PI / 180;
       this.vx += Math.cos(rad) * THRUST * DT;
       this.vy += Math.sin(rad) * THRUST * DT;
-      this.fuel = Math.max(0, this.fuel - FUEL_DRAIN);
+    }
+
+    // Brake: same magnitude as thrust, but in the opposite direction (nose-first retro).
+    this.brake = !!cmd.brake;
+    if (this.brake) {
+      const rad = (this.angle - 90) * Math.PI / 180;
+      this.vx -= Math.cos(rad) * THRUST * DT;
+      this.vy -= Math.sin(rad) * THRUST * DT;
     }
 
     // Gravity: sum -G·M/r² * r̂ from every body
@@ -114,6 +121,30 @@ export class Rocket {
       const a  = b.gm / r2;
       this.vx -= (dx / r) * a * DT;
       this.vy -= (dy / r) * a * DT;
+    }
+
+    // Hyperdrive: while held, velocity = c along current heading.
+    // Save velocity on press-transition, restore it on release.
+    this.hyperdrive = !!cmd.hyperdrive;
+    if (this.hyperdrive && !this._wasHyperdrive) {
+      this._preHyperVx = this.vx;
+      this._preHyperVy = this.vy;
+    }
+    if (this.hyperdrive) {
+      const rad = (this.angle - 90) * Math.PI / 180;
+      this.vx = Math.cos(rad) * SPEED_OF_LIGHT;
+      this.vy = Math.sin(rad) * SPEED_OF_LIGHT;
+    } else if (this._wasHyperdrive) {
+      this.vx = this._preHyperVx;
+      this.vy = this._preHyperVy;
+    }
+    this._wasHyperdrive = this.hyperdrive;
+
+    // Cap velocity magnitude at the speed of light
+    const speed = Math.hypot(this.vx, this.vy);
+    if (speed > SPEED_OF_LIGHT) {
+      this.vx = (this.vx / speed) * SPEED_OF_LIGHT;
+      this.vy = (this.vy / speed) * SPEED_OF_LIGHT;
     }
 
     // Integrate
@@ -132,6 +163,7 @@ export class Rocket {
       const d = distPointSegment(b.x, b.y, nx1, ny1, nx2, ny2);
       if (d < b.radius + halfWidthKm) {
         if (Math.hypot(this.vx, this.vy) > LAND_SPD) return 'crash';
+        if (!b.nearBaseFrom(this.x, this.y))          return 'crash';
         this._landOn(b);
         return { type: 'land', body: b };
       }

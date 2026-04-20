@@ -30,6 +30,24 @@ export function drawRocket(X, rkt) {
     X.fillStyle = fg; X.fill();
   }
 
+  // ── Brake retro-thrusters (two small flames from nose sides, angled outward) ─
+  if (rkt.brake) {
+    const fl = 8 + Math.random() * 8;
+    for (const s of [-1, 1]) {
+      const fg = X.createLinearGradient(s * 3, -12, s * 5, -12 - fl);
+      fg.addColorStop(0,    'rgba(255,230,70,1)');
+      fg.addColorStop(0.45, 'rgba(255,110,20,.85)');
+      fg.addColorStop(1,    'rgba(255,30,0,0)');
+      X.beginPath();
+      X.moveTo(s * 2, -12);
+      X.lineTo(s * 4, -12);
+      X.lineTo(s * 6, -12 - fl);
+      X.lineTo(s * 5, -12 - fl);
+      X.closePath();
+      X.fillStyle = fg; X.fill();
+    }
+  }
+
   // ── Body (grey triangle) ────────────────────────────────────────────────
   X.beginPath();
   X.moveTo(0, -22); X.lineTo(-7, 14); X.lineTo(7, 14);
