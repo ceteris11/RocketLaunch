@@ -22,7 +22,7 @@
 
 import {
   THRUST, ROT_SPD, DT,
-  LAND_SPD, SPEED_OF_LIGHT, BASE_SPAWN_PX,
+  LAND_SPD, SPEED_OF_LIGHT,
   ROCKET_NOSE_PX, ROCKET_TAIL_PX, ROCKET_HALFWIDTH_PX,
 } from '../config.js';
 import { getBaseScale } from '../camera.js';
@@ -45,16 +45,20 @@ export class Rocket {
 
   /** Reset to the launch-pad state above home body. */
   reset() {
-    // Spawn 10 km above the home body's surface along its "base" direction
-    // (falls back to north if no base). The first collision check will land
-    // the rocket cleanly on the pad.
+    // Spawn already landed, tail resting on the capsule collision boundary so
+    // takeoff doesn't immediately re-collide. Free-falling from above is not
+    // viable: the home body's orbital motion would translate it out from under
+    // the rocket before gravity finishes the landing sequence.
     const nx = this.homeBody.base?.localNx ?? 0;
     const ny = this.homeBody.base?.localNy ?? -1;
-    this.x  = this.homeBody.x + nx * (this.homeBody.radius + 10);
-    this.y  = this.homeBody.y + ny * (this.homeBody.radius + 10);
+    const s           = getBaseScale();
+    const tailKm      = ROCKET_TAIL_PX      / s;
+    const halfWidthKm = ROCKET_HALFWIDTH_PX / s;
+    this.x  = this.homeBody.x + nx * (this.homeBody.radius + halfWidthKm + tailKm);
+    this.y  = this.homeBody.y + ny * (this.homeBody.radius + halfWidthKm + tailKm);
     this.vx = 0; this.vy = 0;
 
-    this.angle      = 0;
+    this.angle      = Math.atan2(ny, nx) * 180 / Math.PI + 90;
     this.fire       = false;
     this.brake      = false;
     this.hyperdrive = false;
@@ -63,7 +67,9 @@ export class Rocket {
     this._preHyperVy    = 0;
     this._wasHyperdrive = false;
     this.maxAlt   = 0;
-    this.landedOn = null;     // CelestialBody | null
+    this.landedOn = this.homeBody;
+    this._landedOffsetX = this.x - this.homeBody.x;
+    this._landedOffsetY = this.y - this.homeBody.y;
   }
 
   /**
@@ -82,9 +88,17 @@ export class Rocket {
 
   // ── Landed sub-step ──────────────────────────────────────────────────────
   _stepLanded(cmd) {
+    // Ride the body kinematically — its offset is captured in _landOn so the
+    // rocket follows the body's world position. We deliberately do NOT inherit
+    // the body's orbital velocity: with the sim's sped-up orbits that would
+    // mean launching at hundreds of thousands of km/s, and its direction
+    // rotates with the orbit which makes the HUD speed grow unboundedly.
+    const body = this.landedOn;
+    this.x = body.x + this._landedOffsetX;
+    this.y = body.y + this._landedOffsetY;
+
     // Takeoff: small radial kick outward (thrust or hyperdrive both launch)
     if (cmd.thrust || cmd.hyperdrive) {
-      const body = this.landedOn;
       const dx = this.x - body.x, dy = this.y - body.y;
       const d  = Math.hypot(dx, dy);
       this.vx = (dx / d) * 2;
@@ -168,7 +182,6 @@ export class Rocket {
       const d = distPointSegment(b.x, b.y, nx1, ny1, nx2, ny2);
       if (d < b.radius + halfWidthKm) {
         if (Math.hypot(this.vx, this.vy) > LAND_SPD) return 'crash';
-        if (!b.nearBaseFrom(this.x, this.y))          return 'crash';
         this._landOn(b);
         return { type: 'land', body: b };
       }
@@ -196,26 +209,31 @@ export class Rocket {
   /**
    * Snap the rocket to the surface of `body`, pointing outward, velocity zero.
    *
-   * Note: the spawn-height conversion uses screen scale (pixels → km) to match
-   * the legacy behavior where the rocket sits visually on the pad regardless of
-   * canvas size. This ties physics to viewport, so for deterministic multiplayer
-   * replace BASE_SPAWN_PX with a fixed km value.
+   * The tail rests on the capsule collision boundary (body.radius + halfWidth)
+   * — one half-width above the literal surface — so the next frame doesn't
+   * re-trigger collision when the rocket kicks off. The offset uses screen
+   * scale (pixels → km), so the rocket sits visually flush with the surface
+   * regardless of canvas size. This ties physics to viewport; for deterministic
+   * multiplayer, convert the PX constants to fixed km values.
    */
   _landOn(body) {
     const dx = this.x - body.x, dy = this.y - body.y;
     const d  = Math.hypot(dx, dy);
     const nx = dx / d, ny = dy / d;
 
-    const s      = getBaseScale();
-    const baseKm = BASE_SPAWN_PX  / s;
-    const tailKm = ROCKET_TAIL_PX / s;
-    // Tail sits at body.radius + baseKm; center is one tail-length further out.
-    this.x = body.x + nx * (body.radius + baseKm + tailKm);
-    this.y = body.y + ny * (body.radius + baseKm + tailKm);
+    const s           = getBaseScale();
+    const tailKm      = ROCKET_TAIL_PX      / s;
+    const halfWidthKm = ROCKET_HALFWIDTH_PX / s;
+    // Tail sits on the collision boundary; center is one tail-length further out.
+    this.x = body.x + nx * (body.radius + halfWidthKm + tailKm);
+    this.y = body.y + ny * (body.radius + halfWidthKm + tailKm);
     this.vx = 0; this.vy = 0;
     this.fire = false;
     // Face outward: local "up" (-y) of the sprite aligns with the outward normal
     this.angle = Math.atan2(ny, nx) * 180 / Math.PI + 90;
     this.landedOn = body;
+    // Lock offset so _stepLanded can keep the rocket attached as body orbits.
+    this._landedOffsetX = this.x - body.x;
+    this._landedOffsetY = this.y - body.y;
   }
 }
