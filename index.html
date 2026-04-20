@@ -8,7 +8,7 @@
   DOM contract (IDs referenced from JS):
     #c                     — main canvas
     #score / #alt / #spd   — HUD text fields
-    #fbar                  — fuel bar fill
+    #hyperdrive            — hyperdrive press-and-hold button
     #btn-left / #btn-up / #btn-right — on-screen touch controls
 -->
 <html lang="ko">
@@ -22,27 +22,38 @@
 <canvas id="c"></canvas>
 
 <div id="hud">
-  <div class="card">
+  <div class="card card-minimap">
+    <div class="mini-header">
+      <div class="lbl">미니맵</div>
+      <div class="mini-zoom" id="mini-zoom">
+        <button type="button" data-zoom="1">1×</button>
+        <button type="button" data-zoom="2" class="active">2×</button>
+        <button type="button" data-zoom="4">4×</button>
+        <button type="button" data-zoom="8">8×</button>
+        <button type="button" data-zoom="16">16×</button>
+        <button type="button" data-zoom="32">32×</button>
+        <button type="button" data-zoom="64">64×</button>
+      </div>
+    </div>
+    <canvas id="minimap" width="400" height="280"></canvas>
+  </div>
+  <div class="card card-stats" style="text-align:right">
     <div class="lbl">최대 거리 (점수)</div>
     <div class="val" id="score">0 km</div>
-  </div>
-  <div class="card" style="text-align:center">
-    <div class="lbl">현재 고도</div>
+    <div class="lbl" style="margin-top:6px">현재 고도</div>
     <div class="val" id="alt">0 km</div>
-  </div>
-  <div class="card" style="text-align:right">
-    <div class="lbl">속도</div>
+    <div class="lbl" style="margin-top:6px">속도</div>
     <div class="val" id="spd">0.00 km/s</div>
-    <div class="lbl" style="margin-top:6px">연료</div>
-    <div id="fbar-track"><div id="fbar"></div></div>
+    <button id="hyperdrive" type="button">⚡ 하이퍼드라이브</button>
   </div>
 </div>
 
-<div id="hint">← → 방향 전환 &nbsp;|&nbsp; ↑ 가속</div>
+<div id="hint">← → 방향 전환 &nbsp;|&nbsp; ↑ 가속 &nbsp;|&nbsp; ↓ 브레이크 &nbsp;|&nbsp; Shift 하이퍼드라이브</div>
 
 <div id="touch-controls">
   <div id="btn-left"  class="touch-btn">◀</div>
   <div id="btn-up"    class="touch-btn">▲</div>
+  <div id="btn-down"  class="touch-btn">▼</div>
   <div id="btn-right" class="touch-btn">▶</div>
 </div>
 

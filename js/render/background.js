@@ -2,15 +2,16 @@
 // Background: solid sky + tiling star field
 // ----------------------------------------------------------------------------
 // Stars are generated once inside a single TILE_KM × TILE_KM tile, then that
-// tile is drawn in a grid large enough to cover the screen. As the camera
-// moves, the tile grid scrolls, giving the illusion of a huge star field at
-// a tiny memory cost.
+// tile is drawn in a grid large enough to cover the screen.
 //
-// To add depth (parallax): render a second tile at a fraction of the camera
-// offset, or introduce near/far tiers each with its own scroll speed.
+// The field is stationary during normal flight (so the player never feels a
+// jarring scroll from ordinary motion). It only drifts while hyperdrive is
+// active, giving slow parallax feedback that you're crossing vast distances.
+// The drift speed is a tiny fraction of the rocket velocity — at c the stars
+// should slide past, not streak.
 // ============================================================================
 
-import { TILE_KM, NUM_STARS } from '../config.js';
+import { TILE_KM, NUM_STARS, DT } from '../config.js';
 import { getScale } from '../camera.js';
 
 // Generated once at module load — stars are deterministic for the session.
@@ -21,22 +22,36 @@ const stars = Array.from({ length: NUM_STARS }, () => ({
   a:  Math.random() * 0.65 + 0.35,
 }));
 
+// Persistent drift — only advances while hyperdrive is active.
+let starOffsetX = 0, starOffsetY = 0;
+
+// Fraction of rocket velocity applied to the star drift.
+// At c (299,792 km/s) and DT ≈ 0.083 s this yields ~50 km/frame, which at
+// typical zoom levels reads as a gentle slide rather than a streaking warp.
+const STAR_DRIFT_FACTOR = 0.002;
+
 /**
  * @param X       CanvasRenderingContext2D
  * @param canvas  HTMLCanvasElement
- * @param cam     anything with {x, y} — the camera target's world position
+ * @param rkt     rocket — uses {hyperdrive, vx, vy} for drift
  */
-export function drawBackground(X, canvas, cam) {
+export function drawBackground(X, canvas, rkt) {
   // Flat sky
   X.fillStyle = '#00000d';
   X.fillRect(0, 0, canvas.width, canvas.height);
 
+  // Drift only while in hyperdrive
+  if (rkt.hyperdrive) {
+    starOffsetX += rkt.vx * DT * STAR_DRIFT_FACTOR;
+    starOffsetY += rkt.vy * DT * STAR_DRIFT_FACTOR;
+  }
+
   const s      = getScale();
   const tilePx = TILE_KM * s;
 
-  // Camera's fractional position within the current tile
-  const ox = ((cam.x % TILE_KM) + TILE_KM) % TILE_KM;
-  const oy = ((cam.y % TILE_KM) + TILE_KM) % TILE_KM;
+  // Drift's fractional position within the current tile (wraps cleanly)
+  const ox = ((starOffsetX % TILE_KM) + TILE_KM) % TILE_KM;
+  const oy = ((starOffsetY % TILE_KM) + TILE_KM) % TILE_KM;
 
   // How many tiles we need to cover the screen (+2 safety margin)
   const cols = Math.ceil(canvas.width  / tilePx) + 2;

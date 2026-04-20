@@ -75,11 +75,86 @@ function drawMoon(X, body, canvas) {
   X.fillStyle = g; X.fill();
 }
 
+// ── Sun: bright core + outer glow halo ────────────────────────────────────
+function drawSun(X, body, canvas) {
+  const s = getScale();
+  const [sx, sy] = w2s(body.x, body.y);
+  const sr = Math.max(body.radius * s, 2);
+  if (sx < -sr * 2 - 100 || sx > canvas.width  + sr * 2 + 100) return;
+  if (sy < -sr * 2 - 100 || sy > canvas.height + sr * 2 + 100) return;
+
+  const glow = X.createRadialGradient(sx, sy, sr, sx, sy, sr * 2.2);
+  glow.addColorStop(0, 'rgba(255,220,100,0.55)');
+  glow.addColorStop(1, 'transparent');
+  X.beginPath(); X.arc(sx, sy, sr * 2.2, 0, Math.PI * 2);
+  X.fillStyle = glow; X.fill();
+
+  const core = X.createRadialGradient(sx, sy, 0, sx, sy, sr);
+  core.addColorStop(0,    '#fff7a0');
+  core.addColorStop(0.55, '#ffcc33');
+  core.addColorStop(1,    '#ff7010');
+  X.beginPath(); X.arc(sx, sy, sr, 0, Math.PI * 2);
+  X.fillStyle = core; X.fill();
+}
+
+// Simple shaded-sphere factory used for planets that don't need custom detail.
+function makeSimplePlanet(innerHex, outerHex) {
+  return (X, body, canvas) => {
+    const s = getScale();
+    const [px, py] = w2s(body.x, body.y);
+    const pr = Math.max(body.radius * s, 2);
+    if (px < -pr - 50 || px > canvas.width  + pr + 50) return;
+    if (py < -pr - 50 || py > canvas.height + pr + 50) return;
+    const g = X.createRadialGradient(px - pr * 0.3, py - pr * 0.3, 0, px, py, pr);
+    g.addColorStop(0, innerHex);
+    g.addColorStop(1, outerHex);
+    X.beginPath(); X.arc(px, py, pr, 0, Math.PI * 2);
+    X.fillStyle = g; X.fill();
+  };
+}
+
+// ── Saturn: shaded sphere + thin ring disk ────────────────────────────────
+function drawSaturn(X, body, canvas) {
+  const s = getScale();
+  const [px, py] = w2s(body.x, body.y);
+  const pr = Math.max(body.radius * s, 2);
+  const ringR = pr * 2.1;
+  if (px < -ringR - 50 || px > canvas.width  + ringR + 50) return;
+  if (py < -ringR - 50 || py > canvas.height + ringR + 50) return;
+
+  // Rings (flat ellipse, viewed nearly edge-on)
+  X.save();
+  X.translate(px, py);
+  X.scale(1, 0.28);
+  X.strokeStyle = 'rgba(220,200,150,0.85)';
+  X.lineWidth   = Math.max(pr * 0.18, 1);
+  X.beginPath(); X.arc(0, 0, ringR, 0, Math.PI * 2); X.stroke();
+  X.strokeStyle = 'rgba(200,170,110,0.5)';
+  X.lineWidth   = Math.max(pr * 0.08, 0.5);
+  X.beginPath(); X.arc(0, 0, ringR * 1.18, 0, Math.PI * 2); X.stroke();
+  X.restore();
+
+  // Body
+  const g = X.createRadialGradient(px - pr * 0.3, py - pr * 0.3, 0, px, py, pr);
+  g.addColorStop(0, '#f0e0a0');
+  g.addColorStop(1, '#8a6330');
+  X.beginPath(); X.arc(px, py, pr, 0, Math.PI * 2);
+  X.fillStyle = g; X.fill();
+}
+
 // ── Style registry — add new planet looks here ─────────────────────────────
 const STYLE_MAP = {
-  earth: drawEarth,
-  moon:  drawMoon,
-  // mars: drawMars,  ← example: write drawMars() above and enable here
+  earth:   drawEarth,
+  moon:    drawMoon,
+  sun:     drawSun,
+  mercury: makeSimplePlanet('#c0b0a0', '#605040'),
+  venus:   makeSimplePlanet('#f2dba8', '#8a6040'),
+  mars:    makeSimplePlanet('#ee7450', '#7a2a15'),
+  jupiter: makeSimplePlanet('#e6c088', '#8a6030'),
+  saturn:  drawSaturn,
+  uranus:  makeSimplePlanet('#b8e6ea', '#3a7a98'),
+  neptune: makeSimplePlanet('#6484e4', '#1a3080'),
+  pluto:   makeSimplePlanet('#e0c0a0', '#6a4838'),
 };
 
 // ── Public API ─────────────────────────────────────────────────────────────

@@ -3,67 +3,125 @@
 // ----------------------------------------------------------------------------
 // All celestial-body instances live here. Everything else iterates the exported
 // BODIES array for gravity, collision, rendering, and indicators — no code
-// anywhere else should reference Earth/Moon/etc. by name.
+// anywhere else should reference Sun/Earth/Moon/etc. by name.
 //
 // ── Adding a planet ─────────────────────────────────────────────────────────
 //   1. Add its GM / radius / orbital distance to config.js
-//   2. Instantiate a CelestialBody below (usually with EARTH as parent, or
-//      with parent = null for a sun at the origin)
-//   3. Append to the BODIES array
+//   2. Instantiate a CelestialBody below (usually with SUN as parent, or
+//      with parent = null for a body at the origin)
+//   3. Append to the BODIES array (parents must precede children)
 //   4. Register the renderStyle key in render/bodies.js STYLE_MAP
 //
 // ── Orbital motion ──────────────────────────────────────────────────────────
-//   - Currently every body has orbitAngularVel = 0 (locked positions), so the
-//     world matches the original game exactly. Flip any to non-zero and the
-//     body will orbit. For real-time-ish Moon orbit: 2*Math.PI / (27.3*86400).
+//   - Currently every body has orbitAngularVel = 0 (locked positions). Flip
+//     any to non-zero and the body will orbit. Real orbital periods would be
+//     too slow for gameplay — use something like 2π / (period_in_sim_seconds).
 //   - For nested orbits (moon-of-planet), list the parent before the child.
 //     updateOrbit() relies on the parent's position being current.
 // ============================================================================
 
 import { CelestialBody } from './body.js';
 import {
-  GM_EARTH, R_EARTH,
-  GM_MOON,  R_MOON,  MOON_ALTITUDE,
+  GM_SUN,     R_SUN,
+  GM_MERCURY, R_MERCURY, MERCURY_ORBIT,
+  GM_VENUS,   R_VENUS,   VENUS_ORBIT,
+  GM_EARTH,   R_EARTH,   EARTH_ORBIT,
+  GM_MOON,    R_MOON,    MOON_ALTITUDE,
+  GM_MARS,    R_MARS,    MARS_ORBIT,
+  GM_JUPITER, R_JUPITER, JUPITER_ORBIT,
+  GM_SATURN,  R_SATURN,  SATURN_ORBIT,
+  GM_URANUS,  R_URANUS,  URANUS_ORBIT,
+  GM_NEPTUNE, R_NEPTUNE, NEPTUNE_ORBIT,
+  GM_PLUTO,   R_PLUTO,   PLUTO_ORBIT,
 } from '../config.js';
 
-// ── Earth (origin, fixed) ──────────────────────────────────────────────────
-export const EARTH = new CelestialBody({
-  name: 'earth',
-  displayName: '지구',
-  indicatorColor: '#4af',
+// ── Sun (origin, fixed) ────────────────────────────────────────────────────
+export const SUN = new CelestialBody({
+  name: 'sun', displayName: '태양', indicatorColor: '#fc0',
   x: 0, y: 0,
-  radius: R_EARTH,
-  gm: GM_EARTH,
-  renderStyle: 'earth',
-  // Base sits on Earth's top (Moon-facing side in the legacy layout)
+  radius: R_SUN, gm: GM_SUN, renderStyle: 'sun',
+});
+
+// ── Inner planets ──────────────────────────────────────────────────────────
+export const MERCURY = new CelestialBody({
+  name: 'mercury', displayName: '수성', indicatorColor: '#b8a890',
+  radius: R_MERCURY, gm: GM_MERCURY, renderStyle: 'mercury',
+  parent: SUN, orbitRadius: MERCURY_ORBIT, orbitPhase: 0.4 * Math.PI,
+});
+
+export const VENUS = new CelestialBody({
+  name: 'venus', displayName: '금성', indicatorColor: '#e8c880',
+  radius: R_VENUS, gm: GM_VENUS, renderStyle: 'venus',
+  parent: SUN, orbitRadius: VENUS_ORBIT, orbitPhase: -0.3 * Math.PI,
+});
+
+// Earth orbits the Sun. Placed at phase 0 so its world position is
+// (EARTH_ORBIT, 0), keeping the gameplay "up is away from Earth" intuition
+// aligned with the original layout (Moon above Earth).
+export const EARTH = new CelestialBody({
+  name: 'earth', displayName: '지구', indicatorColor: '#4af',
+  radius: R_EARTH, gm: GM_EARTH, renderStyle: 'earth',
+  parent: SUN, orbitRadius: EARTH_ORBIT, orbitPhase: 0,
   base: { localNx: 0, localNy: -1, color: '#4af' },
 });
 
-// ── Moon (orbits Earth) ────────────────────────────────────────────────────
-// Phase = -π/2 places the Moon directly "above" Earth (y = -orbitRadius),
-// matching the original fixed Moon position.
+// Moon orbits Earth; phase = -π/2 places it directly "above" Earth
+// (y = earth.y - MOON_ORBIT_RADIUS), matching the legacy layout.
 export const MOON = new CelestialBody({
-  name: 'moon',
-  displayName: '달',
-  indicatorColor: '#ccc',
-  radius: R_MOON,
-  gm: GM_MOON,
-  renderStyle: 'moon',
-  parent: EARTH,
-  orbitRadius: R_EARTH + MOON_ALTITUDE,
-  orbitAngularVel: 0,           // TODO: enable real orbit — 2*PI / (27.3*86400)
-  orbitPhase: -Math.PI / 2,
-  // Base on Earth-facing side of Moon
+  name: 'moon', displayName: '달', indicatorColor: '#ccc',
+  radius: R_MOON, gm: GM_MOON, renderStyle: 'moon',
+  parent: EARTH, orbitRadius: R_EARTH + MOON_ALTITUDE, orbitPhase: -Math.PI / 2,
   base: { localNx: 0, localNy: 1, color: '#fa4' },
+});
+
+export const MARS = new CelestialBody({
+  name: 'mars', displayName: '화성', indicatorColor: '#e05830',
+  radius: R_MARS, gm: GM_MARS, renderStyle: 'mars',
+  parent: SUN, orbitRadius: MARS_ORBIT, orbitPhase: 0.6 * Math.PI,
+});
+
+// ── Outer planets ──────────────────────────────────────────────────────────
+export const JUPITER = new CelestialBody({
+  name: 'jupiter', displayName: '목성', indicatorColor: '#d8a868',
+  radius: R_JUPITER, gm: GM_JUPITER, renderStyle: 'jupiter',
+  parent: SUN, orbitRadius: JUPITER_ORBIT, orbitPhase: 1.1 * Math.PI,
+});
+
+export const SATURN = new CelestialBody({
+  name: 'saturn', displayName: '토성', indicatorColor: '#e8c878',
+  radius: R_SATURN, gm: GM_SATURN, renderStyle: 'saturn',
+  parent: SUN, orbitRadius: SATURN_ORBIT, orbitPhase: 0.8 * Math.PI,
+});
+
+export const URANUS = new CelestialBody({
+  name: 'uranus', displayName: '천왕성', indicatorColor: '#a0d0d8',
+  radius: R_URANUS, gm: GM_URANUS, renderStyle: 'uranus',
+  parent: SUN, orbitRadius: URANUS_ORBIT, orbitPhase: 1.4 * Math.PI,
+});
+
+export const NEPTUNE = new CelestialBody({
+  name: 'neptune', displayName: '해왕성', indicatorColor: '#5080d0',
+  radius: R_NEPTUNE, gm: GM_NEPTUNE, renderStyle: 'neptune',
+  parent: SUN, orbitRadius: NEPTUNE_ORBIT, orbitPhase: 0.3 * Math.PI,
+});
+
+export const PLUTO = new CelestialBody({
+  name: 'pluto', displayName: '명왕성', indicatorColor: '#d8b898',
+  radius: R_PLUTO, gm: GM_PLUTO, renderStyle: 'pluto',
+  parent: SUN, orbitRadius: PLUTO_ORBIT, orbitPhase: -0.7 * Math.PI,
 });
 
 /**
  * Ordered list of all bodies in the simulation. Iterated by:
  *   - entities/rocket.js  → gravity + collision
  *   - render/bodies.js    → draw bodies + bases
- *   - render/hud.js       → direction indicators
+ *   - render/hud.js       → direction indicators + minimap
  *   - main.js             → updateOrbit() each frame
  *
  * Order matters for orbital updates: parents must come before children.
  */
-export const BODIES = [EARTH, MOON];
+export const BODIES = [
+  SUN,
+  MERCURY, VENUS, EARTH, MOON, MARS,
+  JUPITER, SATURN, URANUS, NEPTUNE, PLUTO,
+];

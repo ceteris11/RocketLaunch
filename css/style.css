@@ -17,7 +17,7 @@ canvas { display: block; }
 /* ── HUD (top banner cards) ───────────────────────────────────────────────── */
 #hud {
   position: fixed; top: 0; left: 0; right: 0;
-  display: flex; justify-content: space-between; align-items: flex-start;
+  display: flex; justify-content: space-between; align-items: stretch;
   padding: 14px 18px;
   pointer-events: none;
 }
@@ -33,9 +33,54 @@ canvas { display: block; }
 .lbl { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #89d; margin-bottom: 3px; }
 .val { font-size: 20px; font-weight: bold; color: #fff; }
 
-/* Fuel bar */
-#fbar-track { background: rgba(255, 255, 255, 0.15); border-radius: 3px; height: 5px; margin-top: 4px; }
-#fbar       { height: 5px; border-radius: 3px; width: 100%; transition: background .3s; }
+/* Hyperdrive button — press-and-hold to boost to c */
+#hyperdrive {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 0;
+  background: rgba(100, 200, 255, 0.18);
+  border: 1px solid rgba(120, 220, 255, 0.55);
+  border-radius: 4px;
+  color: #cef;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none; -webkit-user-select: none;
+  touch-action: none;
+  transition: background .12s, color .12s, box-shadow .12s;
+}
+#hyperdrive:hover  { background: rgba(100, 200, 255, 0.3); }
+#hyperdrive.active {
+  background: rgba(255, 200, 80, 0.5);
+  border-color: #ffdd66;
+  color: #ffe;
+  box-shadow: 0 0 14px rgba(255, 200, 80, 0.8);
+}
+
+/* Minimap card — expands to fill HUD; stats card takes a fixed slim width.
+   Canvas has a fixed height; card does not stretch to match stats card. */
+.card-minimap { padding: 6px 8px; flex: 1; min-width: 0; display: flex; flex-direction: column; align-self: flex-start; }
+.card-stats   { flex: 0 0 140px; }
+#minimap      { display: block; width: 100%; height: 120px; background: rgba(0,0,0,0.35); border-radius: 4px; margin-top: 3px; }
+
+/* Minimap header row: label + zoom buttons */
+.mini-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.mini-zoom   { display: flex; gap: 2px; pointer-events: auto; }
+.mini-zoom button {
+  background: rgba(80, 180, 255, 0.1);
+  border: 1px solid rgba(80, 180, 255, 0.3);
+  color: #89d;
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.mini-zoom button:hover  { background: rgba(80, 180, 255, 0.25); }
+.mini-zoom button.active { background: rgba(80, 180, 255, 0.4); color: #fff; border-color: rgba(80, 180, 255, 0.8); }
 
 /* ── On-screen hint text ──────────────────────────────────────────────────── */
 #hint {
@@ -78,6 +123,8 @@ canvas { display: block; }
   .card      { padding: 6px 8px; min-width: 0; flex: 1; }
   .lbl       { font-size: 8px;  letter-spacing: 1px; margin-bottom: 2px; }
   .val       { font-size: 14px; }
+  .card-stats { flex: 0 0 110px; }
+  .card-stats .val { font-size: 12px; }
   .touch-btn { width: 64px; height: 64px; font-size: 26px; border-radius: 14px; }
   #touch-controls { gap: 12px; bottom: 16px; }
 }

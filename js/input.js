@@ -21,10 +21,12 @@
 // Logical command names — kept as the raw key strings so keyboard events map
 // directly without a translation table. Change the values if you rebind keys.
 export const CMD = {
-  LEFT:   'ArrowLeft',
-  RIGHT:  'ArrowRight',
-  THRUST: 'ArrowUp',
-  START:  ' ',            // space — restart from crash
+  LEFT:       'ArrowLeft',
+  RIGHT:      'ArrowRight',
+  THRUST:     'ArrowUp',
+  BRAKE:      'ArrowDown',
+  HYPERDRIVE: 'Shift',    // hold to travel at c
+  START:      ' ',        // space — restart from crash
 };
 
 const state = Object.create(null);
@@ -35,9 +37,11 @@ export function setCommand(cmd, pressed) { state[cmd] = !!pressed; }
 /** Snapshot of the current command state as a plain object (for rocket.step). */
 export function readCommands() {
   return {
-    left:   !!state[CMD.LEFT],
-    right:  !!state[CMD.RIGHT],
-    thrust: !!state[CMD.THRUST],
+    left:       !!state[CMD.LEFT],
+    right:      !!state[CMD.RIGHT],
+    thrust:     !!state[CMD.THRUST],
+    brake:      !!state[CMD.BRAKE],
+    hyperdrive: !!state[CMD.HYPERDRIVE],
   };
 }
 
@@ -62,7 +66,11 @@ export function initInput(canvas, onKeyDown) {
   // ── On-screen touch buttons ───────────────────────────────────────────
   bindTouchButton('btn-left',  CMD.LEFT,   onKeyDown);
   bindTouchButton('btn-up',    CMD.THRUST, onKeyDown);
+  bindTouchButton('btn-down',  CMD.BRAKE,  onKeyDown);
   bindTouchButton('btn-right', CMD.RIGHT,  onKeyDown);
+
+  // ── Hyperdrive button (mouse + touch, visual active state) ────────────
+  bindHoldButton('hyperdrive', CMD.HYPERDRIVE, onKeyDown);
 
   // Tap anywhere on the canvas = "any key" (used to dismiss title/crash screens)
   canvas.addEventListener('touchstart', () => onKeyDown(CMD.START), { passive: true });
@@ -86,4 +94,30 @@ function bindTouchButton(id, cmd, onKeyDown) {
   };
   el.addEventListener('touchend',    release, { passive: false });
   el.addEventListener('touchcancel', release, { passive: false });
+}
+
+/**
+ * Hold-to-activate button supporting both mouse and touch.
+ * Toggles `active` class to style the pressed state.
+ */
+function bindHoldButton(id, cmd, onKeyDown) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  const press = () => {
+    setCommand(cmd, true);
+    el.classList.add('active');
+    onKeyDown(cmd);
+  };
+  const release = () => {
+    setCommand(cmd, false);
+    el.classList.remove('active');
+  };
+
+  el.addEventListener('mousedown',  e => { e.preventDefault(); press();   });
+  el.addEventListener('mouseup',    release);
+  el.addEventListener('mouseleave', release);
+  el.addEventListener('touchstart', e => { e.preventDefault(); press();   }, { passive: false });
+  el.addEventListener('touchend',   e => { e.preventDefault(); release(); }, { passive: false });
+  el.addEventListener('touchcancel',e => { e.preventDefault(); release(); }, { passive: false });
 }
