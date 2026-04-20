@@ -25,7 +25,7 @@ import {
   LAND_SPD, SPEED_OF_LIGHT, BASE_SPAWN_PX,
   ROCKET_NOSE_PX, ROCKET_TAIL_PX, ROCKET_HALFWIDTH_PX,
 } from '../config.js';
-import { getScale } from '../camera.js';
+import { getBaseScale } from '../camera.js';
 
 // Shortest distance from point (px,py) to segment (ax,ay)-(bx,by).
 function distPointSegment(px, py, ax, ay, bx, by) {
@@ -68,14 +68,16 @@ export class Rocket {
 
   /**
    * Advance one physics step.
-   * @param cmd    {left:bool, right:bool, thrust:bool}
-   * @param bodies Array<CelestialBody> — gravity sources & collision targets
+   * @param cmd       {left, right, thrust, brake, hyperdrive}
+   * @param bodies    Array<CelestialBody> — gravity sources & collision targets
+   * @param timeSpeed Simulation multiplier (main.js runs this many sub-steps per
+   *                  render frame). Rotation is divided by it so steering stays
+   *                  responsive at 1× feel even at 100× time.
    * @returns {null|'crash'|{type:'land', body:CelestialBody}}
-   *          An event that just occurred this step (for main.js to react to).
    */
-  step(cmd, bodies) {
+  step(cmd, bodies, timeSpeed = 1) {
     if (this.landedOn) { this._stepLanded(cmd); return null; }
-    return this._stepFlight(cmd, bodies);
+    return this._stepFlight(cmd, bodies, timeSpeed);
   }
 
   // ── Landed sub-step ──────────────────────────────────────────────────────
@@ -92,10 +94,13 @@ export class Rocket {
   }
 
   // ── Flight sub-step ──────────────────────────────────────────────────────
-  _stepFlight(cmd, bodies) {
-    // Rotation
-    if (cmd.left)  this.angle -= ROT_SPD;
-    if (cmd.right) this.angle += ROT_SPD;
+  _stepFlight(cmd, bodies, timeSpeed = 1) {
+    // Rotation — divided by timeSpeed so the per-render-frame turn rate is
+    // constant regardless of simulation speed. At 100× the ship would spin
+    // wildly if each sub-step added the full ROT_SPD.
+    const rotSpd = ROT_SPD / timeSpeed;
+    if (cmd.left)  this.angle -= rotSpd;
+    if (cmd.right) this.angle += rotSpd;
 
     // Thrust along current heading
     this.fire = !!cmd.thrust;
@@ -158,7 +163,7 @@ export class Rocket {
     // Collision — treat rocket as a capsule (nose→tail segment + body half-width).
     // First body hit wins.
     const { nx1, ny1, nx2, ny2 } = this._endpoints();
-    const halfWidthKm = ROCKET_HALFWIDTH_PX / getScale();
+    const halfWidthKm = ROCKET_HALFWIDTH_PX / getBaseScale();
     for (const b of bodies) {
       const d = distPointSegment(b.x, b.y, nx1, ny1, nx2, ny2);
       if (d < b.radius + halfWidthKm) {
@@ -177,7 +182,7 @@ export class Rocket {
    * world space is (cos(angle-90), sin(angle-90)).
    */
   _endpoints() {
-    const s = getScale();
+    const s = getBaseScale();
     const noseKm = ROCKET_NOSE_PX / s;
     const tailKm = ROCKET_TAIL_PX / s;
     const rad = (this.angle - 90) * Math.PI / 180;
@@ -201,7 +206,7 @@ export class Rocket {
     const d  = Math.hypot(dx, dy);
     const nx = dx / d, ny = dy / d;
 
-    const s      = getScale();
+    const s      = getBaseScale();
     const baseKm = BASE_SPAWN_PX  / s;
     const tailKm = ROCKET_TAIL_PX / s;
     // Tail sits at body.radius + baseKm; center is one tail-length further out.

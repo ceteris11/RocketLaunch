@@ -12,7 +12,7 @@
 // ============================================================================
 
 import { TILE_KM, NUM_STARS, DT } from '../config.js';
-import { getScale } from '../camera.js';
+import { getScale, getViewMultiplier } from '../camera.js';
 
 // Generated once at module load — stars are deterministic for the session.
 const stars = Array.from({ length: NUM_STARS }, () => ({
@@ -31,20 +31,26 @@ let starOffsetX = 0, starOffsetY = 0;
 const STAR_DRIFT_FACTOR = 0.002;
 
 /**
- * @param X       CanvasRenderingContext2D
- * @param canvas  HTMLCanvasElement
- * @param rkt     rocket — uses {hyperdrive, vx, vy} for drift
+ * @param X          CanvasRenderingContext2D
+ * @param canvas     HTMLCanvasElement
+ * @param rkt        rocket — uses {hyperdrive, vx, vy} for drift
+ * @param timeSpeed  simulation multiplier (matches main.js physics sub-steps)
  */
-export function drawBackground(X, canvas, rkt) {
+export function drawBackground(X, canvas, rkt, timeSpeed = 1) {
   // Flat sky
   X.fillStyle = '#00000d';
   X.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Drift only while in hyperdrive
+  // Drift only while in hyperdrive; scale with simulation speed so fast-forward
+  // mode shows correspondingly faster star motion.
   if (rkt.hyperdrive) {
-    starOffsetX += rkt.vx * DT * STAR_DRIFT_FACTOR;
-    starOffsetY += rkt.vy * DT * STAR_DRIFT_FACTOR;
+    starOffsetX += rkt.vx * DT * STAR_DRIFT_FACTOR * timeSpeed;
+    starOffsetY += rkt.vy * DT * STAR_DRIFT_FACTOR * timeSpeed;
   }
+
+  // Stars only render at 1× view scale — zoomed-out views hide them so the
+  // field doesn't turn into a dense speckle (and the tile loop can't explode).
+  if (getViewMultiplier() !== 1) return;
 
   const s      = getScale();
   const tilePx = TILE_KM * s;

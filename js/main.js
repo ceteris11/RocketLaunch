@@ -63,7 +63,7 @@ import { BODIES, EARTH }          from './world/bodies.js';
 import { Rocket }                 from './entities/rocket.js';
 import { Explosion }              from './entities/explosion.js';
 import { initInput, readCommands, CMD } from './input.js';
-import { initCamera }             from './camera.js';
+import { initCamera, setViewMultiplier } from './camera.js';
 import { drawBackground }         from './render/background.js';
 import { drawBodies, drawBases }  from './render/bodies.js';
 import { drawRocket }             from './render/rocket.js';
@@ -88,7 +88,31 @@ let   phase    = 'title';   // 'title' | 'play' | 'dead'
 let   explosion = null;
 let   gameTime = 0;         // seconds since game start — drives body orbits
 
+// Simulation speed multiplier — physics step runs this many times per render
+// frame. The button group in the stats card updates it; default = 1×.
+let   timeSpeed = 1;
+const timeSpeedEl = document.getElementById('time-speed');
+if (timeSpeedEl) {
+  timeSpeedEl.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn || !btn.dataset.speed) return;
+    timeSpeed = parseInt(btn.dataset.speed, 10);
+    timeSpeedEl.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+  });
+}
+
 initCamera(canvas, rocket);
+
+// Main-view zoom: 1× default, higher multipliers shrink world → fit big bodies.
+const viewScaleEl = document.getElementById('view-scale');
+if (viewScaleEl) {
+  viewScaleEl.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn || !btn.dataset.scale) return;
+    setViewMultiplier(parseFloat(btn.dataset.scale));
+    viewScaleEl.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+  });
+}
 
 // ─── Input wiring (phase transitions) ────────────────────────────────────────
 // input.js keeps per-key state; the callback here only decides when to
@@ -111,18 +135,23 @@ function loop() {
 
 function update() {
   if (phase === 'play') {
-    gameTime += DT;
-    // Advance orbits. BODIES is ordered so parents update before children.
-    for (const b of BODIES) b.updateOrbit(gameTime);
+    const cmd = readCommands();
+    // Run the physics substep `timeSpeed` times to accelerate simulation time.
+    // Sub-stepping (instead of scaling DT) keeps the integrator stable at high
+    // multipliers. Break early if the rocket crashes mid-frame.
+    for (let i = 0; i < timeSpeed; i++) {
+      gameTime += DT;
+      // Advance orbits. BODIES is ordered so parents update before children.
+      for (const b of BODIES) b.updateOrbit(gameTime);
 
-    const cmd   = readCommands();
-    const event = rocket.step(cmd, BODIES);
-
-    if (event === 'crash') {
-      explosion = new Explosion();
-      phase     = 'dead';
+      const event = rocket.step(cmd, BODIES, timeSpeed);
+      if (event === 'crash') {
+        explosion = new Explosion();
+        phase     = 'dead';
+        break;
+      }
+      // (Other events: { type:'land', body } — currently no-op at this layer.)
     }
-    // (Other events: { type:'land', body } — currently no-op at this layer.)
   }
 
   if (explosion) {
@@ -132,7 +161,7 @@ function update() {
 }
 
 function draw() {
-  drawBackground(ctx, canvas, rocket);
+  drawBackground(ctx, canvas, rocket, timeSpeed);
   drawBodies(ctx,    canvas, BODIES);
   drawBases(ctx,     canvas, BODIES);
 
@@ -176,3 +205,27 @@ function drawDeadScreen() {
 }
 
 loop();
+
+// ─── Visitor counter (abacus.jasoncameron.dev — free, account-free) ─────────
+// Per-day counter keyed by YYYYMMDD. Increments once per session, then just
+// reads on subsequent loads so the displayed number stays fresh. Silently
+// hides on any failure — it's ornament, not core.
+(async () => {
+  const el = document.getElementById('visitor-count');
+  if (!el) return;
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const flagKey = `vc_${today}`;
+  try {
+    const verb = sessionStorage.getItem(flagKey) ? 'get' : 'hit';
+    const res = await fetch(`https://abacus.jasoncameron.dev/${verb}/rocketlaunch/${today}`);
+    const data = await res.json();
+    sessionStorage.setItem(flagKey, '1');
+    if (typeof data.value === 'number') {
+      el.textContent = `오늘 방문자 ${data.value.toLocaleString('ko-KR')}명`;
+    } else {
+      el.style.display = 'none';
+    }
+  } catch {
+    el.style.display = 'none';
+  }
+})();
