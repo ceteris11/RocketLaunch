@@ -9,13 +9,17 @@
 // players, pass a tint and multiply it into the body fill in this file.
 // ============================================================================
 
-import { w2s } from '../camera.js';
+import { w2s, getViewMultiplier } from '../camera.js';
 
 export function drawRocket(X, rkt) {
   const [rx, ry] = w2s(rkt.x, rkt.y);
   X.save();
   X.translate(rx, ry);
   X.rotate(rkt.angle * Math.PI / 180);
+  // Shrink the sprite with view zoom so the rocket reads as small when the
+  // camera is wide enough to show Saturn / the Sun.
+  const vs = 1 / getViewMultiplier();
+  X.scale(vs, vs);
 
   // ── Flame (flickers when firing) ────────────────────────────────────────
   if (rkt.fire) {

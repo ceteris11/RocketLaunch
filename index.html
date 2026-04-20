@@ -9,6 +9,8 @@
     #c                     — main canvas
     #score / #alt / #spd   — HUD text fields
     #hyperdrive            — hyperdrive press-and-hold button
+    #mini-zoom             — minimap zoom level button group
+    #time-speed            — simulation time multiplier button group
     #btn-left / #btn-up / #btn-right — on-screen touch controls
 -->
 <html lang="ko">
@@ -36,6 +38,14 @@
       </div>
     </div>
     <canvas id="minimap" width="400" height="280"></canvas>
+    <div class="mini-header" style="margin-top:4px">
+      <div class="lbl">화면 배율</div>
+      <div class="view-scale" id="view-scale">
+        <button type="button" data-scale="1" class="active">1×</button>
+        <button type="button" data-scale="10">10×</button>
+        <button type="button" data-scale="100">100×</button>
+      </div>
+    </div>
   </div>
   <div class="card card-stats" style="text-align:right">
     <div class="lbl">최대 거리 (점수)</div>
@@ -45,10 +55,18 @@
     <div class="lbl" style="margin-top:6px">속도</div>
     <div class="val" id="spd">0.00 km/s</div>
     <button id="hyperdrive" type="button">⚡ 하이퍼드라이브</button>
+    <div class="lbl" style="margin-top:8px">시간 가속</div>
+    <div class="time-speed" id="time-speed">
+      <button type="button" data-speed="1" class="active">1×</button>
+      <button type="button" data-speed="10">10×</button>
+      <button type="button" data-speed="100">100×</button>
+    </div>
   </div>
 </div>
 
 <div id="hint">← → 방향 전환 &nbsp;|&nbsp; ↑ 가속 &nbsp;|&nbsp; ↓ 브레이크 &nbsp;|&nbsp; Shift 하이퍼드라이브</div>
+
+<div id="visitor-count"></div>
 
 <div id="touch-controls">
   <div id="btn-left"  class="touch-btn">◀</div>
